@@ -22,6 +22,9 @@ const App = () => {
   const { isHidden, systemAudio } = useApp();
   const { customizable } = useAppContext();
   const platform = getPlatform();
+  const isSystemAudioThinking = Boolean(
+    systemAudio?.isProcessing || systemAudio?.isAIProcessing
+  );
 
   const openDashboard = async () => {
     try {
@@ -46,7 +49,11 @@ const App = () => {
           isHidden ? "hidden pointer-events-none" : ""
         }`}
       >
-        <div className="phantom-overlay-shell">
+        <div
+          className={`phantom-overlay-shell ${
+            isSystemAudioThinking ? "is-thinking" : ""
+          }`}
+        >
           <DragButton />
 
           {systemAudio?.capturing ? (

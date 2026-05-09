@@ -8,7 +8,7 @@ import {
   saveConversation,
   getConversationById,
   generateConversationTitle,
-  shouldUsePluelyAPI,
+  shouldUseLocalAPI,
   MESSAGE_ID_OFFSET,
   generateConversationId,
   generateMessageId,
@@ -91,6 +91,19 @@ export const useCompletion = () => {
   useEffect(() => {
     screenshotConfigRef.current = screenshotConfiguration;
   }, [screenshotConfiguration]);
+
+  useEffect(() => {
+    const isThinking = state.isLoading || isScreenshotLoading;
+    if (isThinking) {
+      document.body.setAttribute("data-phantom-thinking", "true");
+    } else {
+      document.body.removeAttribute("data-phantom-thinking");
+    }
+
+    return () => {
+      document.body.removeAttribute("data-phantom-thinking");
+    };
+  }, [state.isLoading, isScreenshotLoading]);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -182,9 +195,9 @@ export const useCompletion = () => {
 
         let fullResponse = "";
 
-        const usePluelyAPI = await shouldUsePluelyAPI();
+        const useLocalAPI = await shouldUseLocalAPI();
         // Check if AI provider is configured
-        if (!selectedAIProvider.provider && !usePluelyAPI) {
+        if (!selectedAIProvider.provider && !useLocalAPI) {
           setState((prev) => ({
             ...prev,
             isLoading: false,
@@ -198,7 +211,7 @@ export const useCompletion = () => {
         const provider = allAiProviders.find(
           (p) => p.id === selectedAIProvider.provider
         );
-        if (!provider && !usePluelyAPI) {
+        if (!provider && !useLocalAPI) {
           setState((prev) => ({
             ...prev,
             isLoading: false,
@@ -220,7 +233,7 @@ export const useCompletion = () => {
         try {
           // Use the fetchAIResponse function with signal
           for await (const chunk of fetchAIResponse({
-            provider: usePluelyAPI ? undefined : provider,
+            provider: useLocalAPI ? undefined : provider,
             selectedProvider: selectedAIProvider,
             systemPrompt: systemPrompt || undefined,
             history: messageHistory,
@@ -508,7 +521,7 @@ export const useCompletion = () => {
     };
 
     const handleStorageChange = async (e: StorageEvent) => {
-      if (e.key === "pluely-conversation-selected" && e.newValue) {
+      if (e.key === "phantom-conversation-selected" && e.newValue) {
         try {
           const data = JSON.parse(e.newValue);
           const { id } = data;
@@ -612,9 +625,9 @@ export const useCompletion = () => {
 
             let fullResponse = "";
 
-            const usePluelyAPI = await shouldUsePluelyAPI();
+            const useLocalAPI = await shouldUseLocalAPI();
             // Check if AI provider is configured
-            if (!selectedAIProvider.provider && !usePluelyAPI) {
+            if (!selectedAIProvider.provider && !useLocalAPI) {
               setState((prev) => ({
                 ...prev,
                 isLoading: false,
@@ -628,7 +641,7 @@ export const useCompletion = () => {
             const provider = allAiProviders.find(
               (p) => p.id === selectedAIProvider.provider
             );
-            if (!provider && !usePluelyAPI) {
+            if (!provider && !useLocalAPI) {
               setState((prev) => ({
                 ...prev,
                 isLoading: false,
@@ -640,7 +653,7 @@ export const useCompletion = () => {
 
             // Use the fetchAIResponse function with image and signal
             for await (const chunk of fetchAIResponse({
-              provider: usePluelyAPI ? undefined : provider,
+              provider: useLocalAPI ? undefined : provider,
               selectedProvider: selectedAIProvider,
               systemPrompt: systemPrompt || undefined,
               history: messageHistory,

@@ -2,6 +2,7 @@ const {
   app,
   BrowserWindow,
   desktopCapturer,
+  dialog,
   globalShortcut,
   ipcMain,
   nativeImage,
@@ -31,6 +32,7 @@ let registeredShortcuts = new Map();
 let captureImages = new Map();
 let secureStorageCache;
 let activeHttpRequests = new Map();
+const DB_FILE_NAME = "phantom.db";
 
 function isDev() {
   return !app.isPackaged;
@@ -606,6 +608,90 @@ function decodeSecret(item) {
   return item.value;
 }
 
+function getAppSettingsPath() {
+  return path.join(app.getPath("userData"), "phantom-settings.json");
+}
+
+function readAppSettings() {
+  try {
+    const settingsPath = getAppSettingsPath();
+    if (!fs.existsSync(settingsPath)) return {};
+    return JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeAppSettings(settings) {
+  const settingsPath = getAppSettingsPath();
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+}
+
+function getInstallStorageDir() {
+  return isDev() ? app.getAppPath() : path.dirname(app.getPath("exe"));
+}
+
+function getConversationStorageDir() {
+  const settings = readAppSettings();
+  return settings.conversationStorageDir || getInstallStorageDir();
+}
+
+function getDatabasePath() {
+  return path.join(getConversationStorageDir(), DB_FILE_NAME);
+}
+
+function getLegacyDatabasePath() {
+  return path.join(app.getPath("userData"), DB_FILE_NAME);
+}
+
+function ensureDatabaseFolder() {
+  const folder = getConversationStorageDir();
+  fs.mkdirSync(folder, { recursive: true });
+}
+
+function copyDatabaseIfMissing(sourcePath, targetPath) {
+  if (
+    sourcePath &&
+    targetPath &&
+    sourcePath !== targetPath &&
+    fs.existsSync(sourcePath) &&
+    !fs.existsSync(targetPath)
+  ) {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(sourcePath, targetPath);
+  }
+}
+
+function getConversationStorageInfo() {
+  const settings = readAppSettings();
+  const folderPath = getConversationStorageDir();
+  return {
+    folderPath,
+    databasePath: path.join(folderPath, DB_FILE_NAME),
+    defaultFolderPath: getInstallStorageDir(),
+    isDefault: !settings.conversationStorageDir,
+  };
+}
+
+function switchConversationStorageDir(folderPath) {
+  const previousPath = getDatabasePath();
+  persistDb();
+
+  const settings = readAppSettings();
+  if (folderPath) {
+    settings.conversationStorageDir = folderPath;
+  } else {
+    delete settings.conversationStorageDir;
+  }
+  writeAppSettings(settings);
+
+  const nextPath = getDatabasePath();
+  copyDatabaseIfMissing(previousPath, nextPath);
+  sqlDb = null;
+  return getConversationStorageInfo();
+}
+
 async function getSql() {
   if (!sqlPromise) {
     sqlPromise = initSqlJs({
@@ -618,7 +704,9 @@ async function getSql() {
 async function getDb() {
   if (sqlDb) return sqlDb;
   const SQL = await getSql();
-  const dbPath = path.join(app.getPath("userData"), "phantom.db");
+  ensureDatabaseFolder();
+  const dbPath = getDatabasePath();
+  copyDatabaseIfMissing(getLegacyDatabasePath(), dbPath);
   if (fs.existsSync(dbPath)) {
     sqlDb = new SQL.Database(fs.readFileSync(dbPath));
   } else {
@@ -656,7 +744,7 @@ async function getDb() {
 
 function persistDb() {
   if (!sqlDb) return;
-  const dbPath = path.join(app.getPath("userData"), "phantom.db");
+  const dbPath = getDatabasePath();
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   fs.writeFileSync(dbPath, Buffer.from(sqlDb.export()));
 }
@@ -886,9 +974,9 @@ async function handleInvoke(command, args = {}) {
     case "secure_storage_get": {
       const data = readSecureStorage();
       return {
-        license_key: decodeSecret(data.phantom_license_key || data.pluely_license_key),
-        instance_id: decodeSecret(data.phantom_instance_id || data.pluely_instance_id),
-        selected_pluely_model: decodeSecret(data.selected_pluely_model),
+        license_key: decodeSecret(data.phantom_license_key),
+        instance_id: decodeSecret(data.phantom_instance_id),
+        selected_provider_model: decodeSecret(data.selected_provider_model),
       };
     }
     case "secure_storage_remove": {
@@ -945,6 +1033,26 @@ async function handleInvoke(command, args = {}) {
       return dbExecute(args.sql, args.params || []);
     case "db_select":
       return dbSelect(args.sql, args.params || []);
+    case "get_conversation_storage_info":
+      return getConversationStorageInfo();
+    case "choose_conversation_storage_folder": {
+      const result = await dialog.showOpenDialog(dashboardWindow || mainWindow, {
+        title: "Choose conversation storage folder",
+        properties: ["openDirectory", "createDirectory"],
+      });
+      if (result.canceled || !result.filePaths?.[0]) {
+        return getConversationStorageInfo();
+      }
+      return switchConversationStorageDir(result.filePaths[0]);
+    }
+    case "reset_conversation_storage_folder":
+      return switchConversationStorageDir(null);
+    case "open_conversation_storage_folder": {
+      const info = getConversationStorageInfo();
+      fs.mkdirSync(info.folderPath, { recursive: true });
+      await shell.openPath(info.folderPath);
+      return info;
+    }
     case "check_system_audio_access":
       return true;
     case "request_system_audio_access":

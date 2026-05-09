@@ -1,12 +1,8 @@
 # Phantom Notice
 
-Phantom is a personal Electron prototype derived from and inspired by Pluely.
+Phantom is a personal Electron prototype distributed under the GNU General
+Public License v3.0.
 
-The copied source structure and UI behavior are based on:
-
-- Pluely by Srikanth Nani: https://github.com/iamsrikanthnani/pluely
-- License: GNU General Public License v3.0
-
-This prototype removes Pluely payment, activation, analytics, update, and remote
-usage services. It is intended for local personal use with user-provided AI and
-speech-to-text provider credentials.
+It is intended for local personal use with user-provided AI and speech-to-text
+provider credentials. It does not include payment, activation, analytics,
+license checks, or remote usage reporting.
