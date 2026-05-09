@@ -14,15 +14,15 @@ import { safeLocalStorage } from "@/lib";
 import { STORAGE_KEYS } from "@/config";
 import moment from "moment";
 
-interface PluelyPrompt {
+interface PromptLibraryItem {
   title: string;
   prompt: string;
   modelId: string;
   modelName: string;
 }
 
-interface PluelyPromptsResponse {
-  prompts: PluelyPrompt[];
+interface PromptLibraryResponse {
+  prompts: PromptLibraryItem[];
   total: number;
   last_updated?: string;
 }
@@ -37,24 +37,24 @@ interface Model {
   isAvailable: boolean;
 }
 
-const SELECTED_PLUELY_MODEL_STORAGE_KEY = "selected_pluely_model";
-const SELECTED_PLUELY_PROMPT_STORAGE_KEY = "selected_pluely_prompt";
+const SELECTED_PROVIDER_MODEL_STORAGE_KEY = "selected_provider_model";
+const SELECTED_PROMPT_LIBRARY_ITEM_STORAGE_KEY = "selected_prompt_library_item";
 
-export const PluelyPrompts = () => {
+export const PromptLibrary = () => {
   const {
     setSystemPrompt,
     setSupportsImages,
-    pluelyApiEnabled,
+    localApiEnabled,
   } = useApp();
-  const [prompts, setPrompts] = useState<PluelyPrompt[]>([]);
+  const [prompts, setPrompts] = useState<PromptLibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [selectedPluelyPrompt, setSelectedPluelyPrompt] =
-    useState<PluelyPrompt | null>(() => {
+  const [selectedPromptLibraryItem, setSelectedPromptLibraryItem] =
+    useState<PromptLibraryItem | null>(() => {
       // Load selected prompt from local storage on initial render
       const stored = safeLocalStorage.getItem(
-        SELECTED_PLUELY_PROMPT_STORAGE_KEY
+        SELECTED_PROMPT_LIBRARY_ITEM_STORAGE_KEY
       );
       if (stored) {
         try {
@@ -71,7 +71,7 @@ export const PluelyPrompts = () => {
   useEffect(() => {
     if (!fetchInitiated.current) {
       fetchInitiated.current = true;
-      fetchPluelyPrompts();
+      fetchPromptLibrary();
       fetchModels();
     }
   }, []);
@@ -84,7 +84,7 @@ export const PluelyPrompts = () => {
       );
       // If user has selected one of their own prompts, clear bundled prompt selection
       if (userSelectedPromptId) {
-        setSelectedPluelyPrompt(null);
+        setSelectedPromptLibraryItem(null);
       }
     };
 
@@ -102,11 +102,11 @@ export const PluelyPrompts = () => {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  const fetchPluelyPrompts = async () => {
+  const fetchPromptLibrary = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await invoke<PluelyPromptsResponse>("fetch_prompts");
+      const response = await invoke<PromptLibraryResponse>("fetch_prompts");
       setPrompts(response.prompts);
       if (response.last_updated) {
         setLastUpdated(response.last_updated);
@@ -130,11 +130,11 @@ export const PluelyPrompts = () => {
     }
   };
 
-  const handleSelectPluelyPrompt = async (prompt: PluelyPrompt) => {
+  const handleSelectPromptLibraryItem = async (prompt: PromptLibraryItem) => {
     try {
       // Set the system prompt
       setSystemPrompt(prompt.prompt);
-      setSelectedPluelyPrompt(prompt);
+      setSelectedPromptLibraryItem(prompt);
 
       // Clear the user's selected prompt ID from local storage
       // This ensures the user prompt cards don't show as selected
@@ -145,7 +145,7 @@ export const PluelyPrompts = () => {
 
       // Save the selected bundled prompt to local storage for persistence
       safeLocalStorage.setItem(
-        SELECTED_PLUELY_PROMPT_STORAGE_KEY,
+        SELECTED_PROMPT_LIBRARY_ITEM_STORAGE_KEY,
         JSON.stringify(prompt)
       );
 
@@ -156,7 +156,7 @@ export const PluelyPrompts = () => {
 
       if (matchingModel) {
         // Update supportsImages based on model modality
-        if (pluelyApiEnabled) {
+        if (localApiEnabled) {
           const hasImageSupport =
             matchingModel.modality?.includes("image") ?? false;
           setSupportsImages(hasImageSupport);
@@ -165,7 +165,7 @@ export const PluelyPrompts = () => {
         await invoke("secure_storage_save", {
           items: [
             {
-              key: SELECTED_PLUELY_MODEL_STORAGE_KEY,
+              key: SELECTED_PROVIDER_MODEL_STORAGE_KEY,
               value: JSON.stringify(matchingModel),
             },
           ],
@@ -176,14 +176,14 @@ export const PluelyPrompts = () => {
     }
   };
 
-  const handleCardClick = (prompt: PluelyPrompt) => {
-    handleSelectPluelyPrompt(prompt);
+  const handleCardClick = (prompt: PromptLibraryItem) => {
+    handleSelectPromptLibraryItem(prompt);
   };
 
-  const isPromptSelected = (prompt: PluelyPrompt) => {
+  const isPromptSelected = (prompt: PromptLibraryItem) => {
     return (
-      selectedPluelyPrompt?.title === prompt.title &&
-      selectedPluelyPrompt?.modelId === prompt.modelId
+      selectedPromptLibraryItem?.title === prompt.title &&
+      selectedPromptLibraryItem?.modelId === prompt.modelId
     );
   };
 

@@ -145,14 +145,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     safeLocalStorage.setItem(STORAGE_KEYS.SUPPORTS_IMAGES, String(value));
   };
 
-  // Phantom is a local-only personal build. The hosted Pluely API is disabled.
-  const [pluelyApiEnabled, setPluelyApiEnabledState] = useState<boolean>(
+  // Phantom is a local-only personal build. The hosted compatibility API is disabled.
+  const [localApiEnabled, setLocalApiEnabledState] = useState<boolean>(
     false
   );
 
   const getActiveLicenseStatus = async () => {
     setHasActiveLicense(true);
-    setPluelyApiEnabled(false);
+    setLocalApiEnabled(false);
   };
 
   useEffect(() => {
@@ -287,8 +287,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, "false");
-    setPluelyApiEnabledState(false);
+    safeLocalStorage.setItem(STORAGE_KEYS.LOCAL_API_ENABLED, "false");
+    setLocalApiEnabledState(false);
 
     // Load selected audio devices
     const savedAudioDevices = safeLocalStorage.getItem(
@@ -471,7 +471,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
 
     checkImageSupport();
-  }, [pluelyApiEnabled, selectedAIProvider.provider]);
+  }, [localApiEnabled, selectedAIProvider.provider]);
 
   // Sync selected AI to localStorage
   useEffect(() => {
@@ -518,7 +518,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
 
     // Update supportsImages immediately when provider changes
-    if (!pluelyApiEnabled) {
+    if (!localApiEnabled) {
       const selectedProvider = allAiProviders.find((p) => p.id === provider);
       if (selectedProvider) {
         const hasImageSupport =
@@ -599,9 +599,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     loadData();
   };
 
-  const setPluelyApiEnabled = async (_enabled: boolean) => {
-    setPluelyApiEnabledState(false);
-    safeLocalStorage.setItem(STORAGE_KEYS.PLUELY_API_ENABLED, "false");
+  const setLocalApiEnabled = async (_enabled: boolean) => {
+    setLocalApiEnabledState(false);
+    safeLocalStorage.setItem(STORAGE_KEYS.LOCAL_API_ENABLED, "false");
 
     const provider = allAiProviders.find(
       (p) => p.id === selectedAIProvider.provider
@@ -635,8 +635,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     toggleAlwaysOnTop,
     toggleAutostart,
     loadData,
-    pluelyApiEnabled,
-    setPluelyApiEnabled,
+    localApiEnabled,
+    setLocalApiEnabled,
     hasActiveLicense,
     setHasActiveLicense,
     getActiveLicenseStatus,

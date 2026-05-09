@@ -6,7 +6,7 @@ import {
   saveConversation,
   getConversationById,
   generateConversationTitle,
-  shouldUsePluelyAPI,
+  shouldUseLocalAPI,
   MESSAGE_ID_OFFSET,
   generateMessageId,
   generateRequestId,
@@ -176,9 +176,9 @@ export const useChatCompletion = (
           });
         }
 
-        const usePluelyAPI = await shouldUsePluelyAPI();
+        const useLocalAPI = await shouldUseLocalAPI();
         // Check if AI provider is configured
-        if (!selectedAIProvider.provider && !usePluelyAPI) {
+        if (!selectedAIProvider.provider && !useLocalAPI) {
           setState((prev) => ({
             ...prev,
             error:
@@ -190,7 +190,7 @@ export const useChatCompletion = (
         const provider = allAiProviders.find(
           (p) => p.id === selectedAIProvider.provider
         );
-        if (!provider && !usePluelyAPI) {
+        if (!provider && !useLocalAPI) {
           setState((prev) => ({
             ...prev,
             error: "Invalid provider selected",
@@ -231,7 +231,7 @@ export const useChatCompletion = (
         try {
           // Use the fetchAIResponse function with signal
           for await (const chunk of fetchAIResponse({
-            provider: usePluelyAPI ? undefined : provider,
+            provider: useLocalAPI ? undefined : provider,
             selectedProvider: selectedAIProvider,
             systemPrompt: systemPrompt || undefined,
             history: messageHistory,

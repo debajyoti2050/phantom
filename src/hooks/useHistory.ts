@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getAllConversations,
   deleteConversation,
+  deleteAllConversations,
   DOWNLOAD_SUCCESS_DISPLAY_MS,
 } from "@/lib";
 import { ChatConversation } from "@/types/completion";
@@ -32,6 +33,9 @@ export interface UseHistoryReturn {
     conversation: ChatConversation | null,
     e: React.MouseEvent
   ) => void;
+  handleDeleteConversations: (conversationIds: string[]) => Promise<void>;
+  handleKeepOnlyConversations: (conversationIds: string[]) => Promise<void>;
+  handleDeleteAllConversations: () => Promise<void>;
   search: string;
   setSearch: React.Dispatch<React.SetStateAction<string>>;
   // Utilities
@@ -150,6 +154,55 @@ export function useHistory(): UseHistoryReturn {
     }
   };
 
+  const handleDeleteConversations = async (conversationIds: string[]) => {
+    const ids = Array.from(new Set(conversationIds)).filter(Boolean);
+    if (ids.length === 0) return;
+
+    try {
+      await Promise.all(ids.map((id) => deleteConversation(id)));
+      setSelectedConversationId((current) =>
+        current && ids.includes(current) ? null : current
+      );
+      setViewingConversation((current) =>
+        current && ids.includes(current.id) ? null : current
+      );
+      setConversations((prev) => prev.filter((c) => !ids.includes(c.id)));
+
+      ids.forEach((id) => {
+        window.dispatchEvent(
+          new CustomEvent("conversationDeleted", {
+            detail: id,
+          })
+        );
+      });
+    } catch (error) {
+      console.error("Failed to delete selected conversations:", error);
+      throw error;
+    }
+  };
+
+  const handleKeepOnlyConversations = async (conversationIds: string[]) => {
+    const keepIds = new Set(conversationIds);
+    const deleteIds = conversations
+      .filter((conversation) => !keepIds.has(conversation.id))
+      .map((conversation) => conversation.id);
+
+    await handleDeleteConversations(deleteIds);
+  };
+
+  const handleDeleteAllConversations = async () => {
+    try {
+      await deleteAllConversations();
+      setSelectedConversationId(null);
+      setViewingConversation(null);
+      setConversations([]);
+      window.dispatchEvent(new CustomEvent("newConversation"));
+    } catch (error) {
+      console.error("Failed to delete all conversations:", error);
+      throw error;
+    }
+  };
+
   const cancelDelete = () => {
     setDeleteConfirm(null);
   };
@@ -157,7 +210,7 @@ export function useHistory(): UseHistoryReturn {
   const handleAttachToOverlay = (conversationId: string) => {
     // Use localStorage to communicate between windows
     localStorage.setItem(
-      "pluely-conversation-selected",
+      "phantom-conversation-selected",
       JSON.stringify({ id: conversationId, timestamp: Date.now() })
     );
     setIsAttached(true);
@@ -227,6 +280,9 @@ export function useHistory(): UseHistoryReturn {
     cancelDelete,
     handleAttachToOverlay,
     handleDownload,
+    handleDeleteConversations,
+    handleKeepOnlyConversations,
+    handleDeleteAllConversations,
     // Utilities
     refreshConversations,
     search,

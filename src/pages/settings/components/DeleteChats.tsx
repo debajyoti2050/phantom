@@ -10,19 +10,17 @@ export const DeleteChats = ({
 }: UseSettingsReturn) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const deleteAllChats = () => {
+  const deleteAllChats = async () => {
     setIsDeleting(true);
-    handleDeleteAllChatsConfirm();
-    setTimeout(() => {
-      setIsDeleting(false);
-    }, 2000);
+    await handleDeleteAllChatsConfirm();
+    setTimeout(() => setIsDeleting(false), 2000);
   };
 
   return (
     <div id="delete-chats" className="space-y-3">
       <Header
         title="Delete Chat History"
-        description="Permanently delete all your chat conversations and history. This action cannot be undone and will remove all stored conversations from your local storage."
+        description="Permanently delete all conversations from the local database. This action cannot be undone."
         isMainTitle
       />
 
@@ -30,7 +28,7 @@ export const DeleteChats = ({
         {isDeleting && (
           <div className="p-3 bg-green-50 border border-green-200 rounded-md">
             <p className="text-xs text-green-700 font-medium">
-              ✅ All chat history has been successfully deleted.
+              All chat history has been successfully deleted.
             </p>
           </div>
         )}

@@ -8,10 +8,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { TYPE_PROVIDER } from "@/types";
 import curl2Json from "@bany/curl-to-json";
-import { shouldUsePluelyAPI } from "./pluely.api";
+import { shouldUseLocalAPI } from "./local-api";
 
 // Hosted STT function retained for compatibility. It is disabled in Phantom.
-async function fetchPluelySTT(audio: File | Blob): Promise<string> {
+async function fetchLocalSTT(audio: File | Blob): Promise<string> {
   try {
     // Convert audio to base64
     const audioBase64 = await blobToBase64(audio);
@@ -55,9 +55,9 @@ export async function fetchSTT(params: STTParams): Promise<string> {
     const { provider, selectedProvider, audio } = params;
 
     // Check if we should use the hosted compatibility path instead.
-    const usePluelyAPI = await shouldUsePluelyAPI();
-    if (usePluelyAPI) {
-      return await fetchPluelySTT(audio);
+    const useLocalAPI = await shouldUseLocalAPI();
+    if (useLocalAPI) {
+      return await fetchLocalSTT(audio);
     }
 
     if (!provider) throw new Error("Provider not provided");
