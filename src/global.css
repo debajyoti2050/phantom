@@ -200,7 +200,7 @@
     position: relative;
     z-index: 1;
     display: flex;
-    width: 5.1rem;
+    width: 13.25rem;
     flex-direction: column;
     user-select: none;
     border-right: 1px solid rgba(255, 255, 255, 0.075);
@@ -236,13 +236,14 @@
     display: flex;
     width: 100%;
     align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
+    justify-content: space-between;
+    gap: 0.75rem;
     border: 1px solid transparent;
     border-radius: 0.7rem;
-    padding: 0.68rem 0.45rem;
+    padding: 0.68rem 0.75rem;
     color: rgba(235, 231, 220, 0.56);
-    font-size: 0.75rem;
+    font-size: 0.86rem;
+    font-weight: 500;
     transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
   }
 
@@ -271,7 +272,11 @@
   }
 
   .phantom-nav-label {
-    display: none;
+    display: inline;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .phantom-footer-button {
@@ -438,7 +443,7 @@
     overflow: hidden;
   }
 
-  /* Soft border ring — single tone, gentle opacity pulse */
+  /* Soft border ring - single tone, gentle opacity pulse */
   .phantom-overlay-shell::before {
     content: "";
     pointer-events: none;
@@ -465,7 +470,7 @@
     will-change: opacity;
   }
 
-  /* Whisper sheen — infrequent, soft */
+  /* Whisper sheen - infrequent, soft */
   .phantom-overlay-shell::after {
     content: "";
     pointer-events: none;
@@ -491,8 +496,9 @@
   }
 
   /* === THINKING STATE: AI request in flight === */
-  /* Subtle warm tint shift, faster pulse, continuous sheen — no halo bleed */
-  body[data-phantom-thinking="true"] .phantom-overlay-shell::before {
+  /* Subtle warm tint shift, faster pulse, continuous sheen. */
+  body[data-phantom-thinking="true"] .phantom-overlay-shell::before,
+  .phantom-overlay-shell.is-thinking::before {
     background: linear-gradient(110deg,
       rgba(255, 220, 178, 0.42),
       rgba(186, 210, 232, 0.28) 50%,
@@ -502,7 +508,8 @@
     animation: phantom-shell-think 1.8s ease-in-out infinite;
   }
 
-  body[data-phantom-thinking="true"] .phantom-overlay-shell::after {
+  body[data-phantom-thinking="true"] .phantom-overlay-shell::after,
+  .phantom-overlay-shell.is-thinking::after {
     width: 30%;
     background: linear-gradient(100deg,
       transparent 0%,
@@ -575,6 +582,47 @@
     box-shadow: 0 0 0 3px rgba(114, 216, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
   }
 
+  .phantom-command-input.is-thinking {
+    border-color: rgba(255, 220, 178, 0.34) !important;
+    background:
+      linear-gradient(90deg, rgba(255, 220, 178, 0.055), rgba(114, 216, 255, 0.035), rgba(255, 220, 178, 0.055)),
+      rgba(8, 9, 11, 0.78) !important;
+    background-size: 220% 100%, auto !important;
+    box-shadow:
+      0 0 0 3px rgba(255, 220, 178, 0.045),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    animation: phantom-input-thinking 2.2s ease-in-out infinite;
+  }
+
+  .phantom-thinking-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    border: 1px solid rgba(255, 220, 178, 0.18);
+    border-radius: 999px;
+    background: rgba(20, 22, 27, 0.82);
+    padding: 0.28rem 0.38rem;
+    box-shadow: 0 0 14px rgba(255, 220, 178, 0.08);
+  }
+
+  .phantom-thinking-indicator span {
+    display: block;
+    width: 0.27rem;
+    height: 0.27rem;
+    border-radius: 999px;
+    background: rgba(255, 220, 178, 0.92);
+    animation: phantom-thinking-dot 1.12s ease-in-out infinite;
+  }
+
+  .phantom-thinking-indicator span:nth-child(2) {
+    animation-delay: 0.14s;
+    background: rgba(186, 210, 232, 0.92);
+  }
+
+  .phantom-thinking-indicator span:nth-child(3) {
+    animation-delay: 0.28s;
+  }
+
   .phantom-response-panel,
   .phantom-response-window {
     position: relative;
@@ -593,7 +641,7 @@
     overflow: hidden !important;
   }
 
-  /* Soft border ring on response window — mirrors top bar */
+  /* Soft border ring on response window - mirrors top bar */
   .phantom-response-panel::before,
   .phantom-response-window::before {
     content: "";
@@ -936,29 +984,49 @@
   }
 }
 
-/* Idle border breath — opacity only */
+/* Idle border breath - opacity only */
 @keyframes phantom-shell-breathe {
   0%, 100% { opacity: 0.32; }
   50% { opacity: 0.7; }
 }
 
-/* Idle sheen — long pause, single sweep */
+/* Idle sheen - long pause, single sweep */
 @keyframes phantom-shell-sheen {
   0%, 38% { transform: translate3d(-150%, 0, 0); opacity: 0; }
   48% { opacity: 1; }
   72%, 100% { transform: translate3d(420%, 0, 0); opacity: 0; }
 }
 
-/* Thinking border — slightly faster, brighter */
+/* Thinking border - slightly faster, brighter */
 @keyframes phantom-shell-think {
   0%, 100% { opacity: 0.48; }
   50% { opacity: 0.92; }
 }
 
-/* Thinking sheen — continuous, slow */
+/* Thinking sheen - continuous, slow */
 @keyframes phantom-shell-think-sweep {
   0% { transform: translate3d(-150%, 0, 0); }
   100% { transform: translate3d(420%, 0, 0); }
+}
+
+@keyframes phantom-input-thinking {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes phantom-thinking-dot {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translateY(-0.12rem);
+    opacity: 1;
+  }
 }
 
 @keyframes phantom-panel-line {

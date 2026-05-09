@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { DeleteSystemPrompt } from "./Delete";
 import { CreateEditDialog } from "./CreateEditDialog";
-import { PluelyPrompts } from "./PluelyPrompts";
+import { PromptLibrary } from "./PromptLibrary";
 import { useState } from "react";
 import { PageLayout } from "@/layouts";
 
@@ -295,7 +295,7 @@ const SystemPrompts = () => {
       />
 
       {/* Phantom Default Prompts */}
-      <PluelyPrompts />
+      <PromptLibrary />
     </PageLayout>
   );
 };

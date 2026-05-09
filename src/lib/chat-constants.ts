@@ -31,7 +31,8 @@ export const CONVERSATION_SAVE_DEBOUNCE_MS = 500;
 /**
  * CHUNK_POLL_INTERVAL_MS
  *
- * How frequently to check for new streaming chunks from Pluely API.
+ * How frequently to check for new streaming chunks from the hosted
+ * compatibility API.
  *
  * 50ms provides smooth streaming without excessive CPU usage.
  * Lower = more responsive but higher CPU usage

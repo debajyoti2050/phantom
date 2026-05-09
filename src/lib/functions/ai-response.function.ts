@@ -10,7 +10,7 @@ import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import curl2Json from "@bany/curl-to-json";
-import { shouldUsePluelyAPI } from "./pluely.api";
+import { shouldUseLocalAPI } from "./local-api";
 import { CHUNK_POLL_INTERVAL_MS } from "../chat-constants";
 import { getResponseSettings, RESPONSE_LENGTHS, LANGUAGES } from "@/lib";
 import { MARKDOWN_FORMATTING_INSTRUCTIONS } from "@/config/constants";
@@ -44,7 +44,7 @@ function buildEnhancedSystemPrompt(baseSystemPrompt?: string): string {
 }
 
 // Hosted AI streaming function retained for compatibility. It is disabled in Phantom.
-async function* fetchPluelyAIResponse(params: {
+async function* fetchLocalAIResponse(params: {
   systemPrompt?: string;
   userMessage: string;
   imagesBase64?: string[];
@@ -192,9 +192,9 @@ export async function* fetchAIResponse(params: {
     const enhancedSystemPrompt = buildEnhancedSystemPrompt(systemPrompt);
 
     // Check if we should use the hosted compatibility path instead.
-    const usePluelyAPI = await shouldUsePluelyAPI();
-    if (usePluelyAPI) {
-      yield* fetchPluelyAIResponse({
+    const useLocalAPI = await shouldUseLocalAPI();
+    if (useLocalAPI) {
+      yield* fetchLocalAIResponse({
         systemPrompt: enhancedSystemPrompt,
         userMessage,
         imagesBase64,
