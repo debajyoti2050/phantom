@@ -33,6 +33,12 @@ let captureImages = new Map();
 let secureStorageCache;
 let activeHttpRequests = new Map();
 const DB_FILE_NAME = "phantom.db";
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
 
 function isDev() {
   return !app.isPackaged;
@@ -562,12 +568,17 @@ function updateShortcuts(config) {
 
   if (failures.length) {
     emitToAll("shortcut-registration-error", failures);
-    throw new Error(
+    console.warn(
       `Some shortcuts could not be registered: ${failures
         .map(([action, key]) => `${action} (${key})`)
         .join("; ")}`
     );
   }
+
+  return {
+    registered: Object.fromEntries(registeredShortcuts.entries()),
+    failures,
+  };
 }
 
 function getSecureStoragePath() {
@@ -957,8 +968,7 @@ async function handleInvoke(command, args = {}) {
     case "get_registered_shortcuts":
       return Object.fromEntries(registeredShortcuts.entries());
     case "update_shortcuts":
-      updateShortcuts(args.config);
-      return null;
+      return updateShortcuts(args.config);
     case "validate_shortcut_key":
       return Boolean(normalizeAccelerator(args.key || ""));
     case "set_license_status":

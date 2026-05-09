@@ -16,8 +16,6 @@ const isAnyExpandedSurfaceOpen = (): boolean => {
 export const useWindowResize = () => {
   const resizeWindow = useCallback(async (expanded: boolean) => {
     try {
-      const window = getCurrentWebviewWindow();
-
       if (!expanded && isAnyExpandedSurfaceOpen()) {
         return;
       }
@@ -27,7 +25,6 @@ export const useWindowResize = () => {
         : COLLAPSED_WINDOW_HEIGHT;
 
       await invoke("set_window_height", {
-        window,
         height: newHeight,
       });
     } catch (error) {
