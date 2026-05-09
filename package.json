@@ -2,7 +2,7 @@
   "name": "phantom",
   "private": true,
   "version": "0.1.0",
-  "description": "Personal Electron AI overlay assistant inspired by Pluely.",
+  "description": "Phantom — transparent AI overlay for Windows.",
   "author": "Phantom",
   "license": "GPL-3.0",
   "type": "module",

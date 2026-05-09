@@ -84,9 +84,9 @@ export const useMenuItems = () => {
     link: string;
   }[] = [
     {
-      title: "Source reference",
+      title: "GitHub",
       icon: GithubIcon,
-      link: "https://github.com/iamsrikanthnani/pluely",
+      link: "https://github.com/debajyoti2050/phantom",
     },
   ];
 
