@@ -1,53 +1,363 @@
-# Phantom
+<div align="center">
 
-Phantom is a Windows-first personal Electron AI overlay prototype inspired by
-the GPL Pluely project. It is local software with no payment, license,
-activation, analytics, hosted usage reporting, or paywall behavior.
+# 👻 Phantom
 
-## Features
+**A transparent AI overlay for your Windows desktop.**  
+Ask anything, attach screenshots, transcribe audio — all without leaving your workflow.
 
-- Transparent overlay window with global shortcuts
-- Dashboard for chats, prompts, providers, audio, screenshots, responses, and settings
-- OpenAI-compatible AI provider configuration with editable endpoint, key, model, headers, and response paths
-- STT provider configuration through editable curl/provider templates
-- Main-process HTTP proxy for provider requests, avoiding browser CORS limits
-- Full-screen and selected-area screenshots
-- Microphone and Windows system-audio loopback prototype support
-- Local SQLite persistence for conversations, messages, and system prompts
-- Local secure storage for provider secrets through Electron `safeStorage` where available
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078d4?logo=windows)](https://github.com)
+[![Built with Electron](https://img.shields.io/badge/Electron-39-47848f?logo=electron)](https://electronjs.org)
+[![React](https://img.shields.io/badge/React-18-61dafb?logo=react)](https://react.dev)
+[![No Telemetry](https://img.shields.io/badge/Telemetry-None-brightgreen)](README.md)
 
-## Development
+---
+
+*Float. Ask. Respond. Disappear.*
+
+</div>
+
+---
+
+## What is Phantom?
+
+Phantom is a **floating AI command bar** that lives on top of every window on your screen — invisible until you need it. Press a shortcut, type a question, get an answer. It never gets in your way.
+
+- Works **on top of any application** — games, browsers, editors, terminals
+- Connects to **any AI provider** — OpenAI, Claude, Gemini, Grok, or your own
+- **No subscription, no telemetry, no cloud sync** — your API key, your data
+- Transcribes your **microphone or system audio** in real time
+- Attaches **screenshots** and **files** to any message
+
+---
+
+## Features at a Glance
+
+| Feature | Details |
+|---------|---------|
+| **Transparent Overlay** | Frameless, always-on-top window. Toggle with `Ctrl+\` |
+| **10 Built-in AI Providers** | OpenAI, Claude, Gemini, Grok, Mistral, Cohere, Groq, Perplexity, OpenRouter, Ollama |
+| **Custom Providers** | Add any OpenAI-compatible endpoint via a curl template |
+| **Speech-to-Text** | 9 built-in STT providers + custom curl templates |
+| **Screenshot Capture** | Full-screen or drag-select a region, auto-attached to your next message |
+| **System Audio Loopback** | Transcribe audio playing on your PC (Windows) |
+| **File Attachments** | Attach up to 6 files per message |
+| **Conversation History** | SQLite-backed local storage, searchable from the dashboard |
+| **Custom System Prompts** | Save and switch personas/contexts on the fly |
+| **Secure Key Storage** | API keys encrypted via Electron `safeStorage` |
+| **Streaming Responses** | Real-time token streaming for all built-in providers |
+| **Keyboard-Driven** | Every action has a configurable shortcut |
+| **No Paywall** | GPL-3.0 open source. Forever free. |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- **Windows 10/11** (64-bit)
+- **Node.js 20+** — [nodejs.org](https://nodejs.org)
+- **npm** (comes with Node)
+- An API key from at least one AI provider (or a local Ollama install)
+
+### Install & Run
 
 ```powershell
-npm.cmd install
-npm.cmd run dev
+# Clone the repo
+git clone https://github.com/your-username/phantom.git
+cd phantom
+
+# Install dependencies
+npm install
+
+# Start in development mode
+npm run dev
 ```
 
-The dev server runs Vite at `http://127.0.0.1:1420` and starts Electron.
+The Vite dev server starts at `http://127.0.0.1:1420` and Electron launches automatically.
 
-## Build
+### Build a Distributable
 
 ```powershell
-npm.cmd run typecheck
-npm.cmd run build
-npm.cmd run dist
+# Type-check first
+npm run typecheck
+
+# Build the renderer bundle
+npm run build
+
+# Package Windows installer + portable executable
+npm run dist
 ```
 
-`npm.cmd run build` creates the renderer production bundle. `npm.cmd run dist`
-builds Windows artifacts with Electron Builder.
+Output lands in `dist/` — you get an NSIS installer and a portable `.exe`.
 
-## Shortcuts
+---
 
-- `Ctrl+\`: toggle overlay
-- `Ctrl+Shift+I`: focus overlay input
-- `Ctrl+Shift+D`: toggle dashboard
-- `Ctrl+Arrow`: move overlay
+## Setting Up Your First AI Provider
 
-Shortcuts can be changed from the dashboard.
+When Phantom opens for the first time, open the **Dashboard** (`Ctrl+Shift+D`) and go to **Providers**.
 
-## Attribution
+### Option A — Built-in Providers (Recommended)
 
-Phantom uses Pluely as a GPL behavior and source reference:
-https://github.com/iamsrikanthnani/pluely
+Choose from 10 pre-configured providers. All you need is an API key.
 
-See `LICENSE` and `NOTICE.md`.
+| Provider | Where to get a key |
+|----------|--------------------|
+| **OpenAI** | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| **Claude (Anthropic)** | [console.anthropic.com](https://console.anthropic.com) |
+| **Gemini (Google)** | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+| **Grok (xAI)** | [console.x.ai](https://console.x.ai) |
+| **Mistral** | [console.mistral.ai](https://console.mistral.ai) |
+| **Cohere** | [dashboard.cohere.com](https://dashboard.cohere.com) |
+| **Groq** | [console.groq.com](https://console.groq.com) |
+| **Perplexity** | [perplexity.ai/settings/api](https://perplexity.ai/settings/api) |
+| **OpenRouter** | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| **Ollama** | No key needed — [ollama.com](https://ollama.com) (runs locally) |
+
+**Steps:**
+1. Open Dashboard → **Providers** tab
+2. Click a provider card
+3. Paste your API key
+4. Pick a model from the dropdown
+5. Click **Save** — you're ready
+
+---
+
+### Option B — Custom Provider (Advanced)
+
+Phantom uses **curl templates** to support any HTTP-based AI API. This means if a service has a REST API, you can connect it.
+
+#### How Custom Providers Work
+
+A custom provider is a curl command with placeholder variables that Phantom fills in at request time:
+
+| Variable | Replaced with |
+|----------|--------------|
+| `{{API_KEY}}` | Your stored API key (encrypted) |
+| `{{MODEL}}` | The selected model name |
+| `{{SYSTEM_PROMPT}}` | Your active system prompt |
+| `{{TEXT}}` | The user's message text |
+| `{{IMAGE}}` | Base64-encoded image (if screenshot/image attached) |
+
+#### Example: OpenAI-compatible endpoint
+
+```bash
+curl https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer {{API_KEY}}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "{{MODEL}}",
+    "stream": true,
+    "messages": [
+      {"role": "system", "content": "{{SYSTEM_PROMPT}}"},
+      {"role": "user", "content": "{{TEXT}}"}
+    ]
+  }'
+```
+
+#### Example: Custom endpoint with image support
+
+```bash
+curl https://my-api.example.com/v1/chat/completions \
+  -H "Authorization: Bearer {{API_KEY}}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "{{MODEL}}",
+    "stream": true,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {"type": "text", "text": "{{TEXT}}"},
+          {"type": "image_url", "image_url": {"url": "data:image/png;base64,{{IMAGE}}"}}
+        ]
+      }
+    ]
+  }'
+```
+
+#### Adding a Custom Provider
+
+1. Dashboard → **Providers** → **Add Custom**
+2. Paste your curl command with `{{variables}}`
+3. Set **Response Content Path** — a dot-notation path to extract the text from the JSON response:
+   - OpenAI format: `choices[0].message.content`
+   - Anthropic format: `content[0].text`
+   - Custom: inspect your API's response shape and trace the path to the text field
+4. Toggle **Streaming** if your endpoint supports `text/event-stream`
+5. Enter your API key — it gets encrypted on save
+6. Click **Save**
+
+> **Tip:** Click "Copy from built-in" to start from a working template and modify it.
+
+---
+
+## Speech-to-Text Setup
+
+Phantom supports both **microphone input** and **Windows system audio loopback** (transcribing audio playing on your PC).
+
+### Built-in STT Providers
+
+| Provider | Notes |
+|----------|-------|
+| OpenAI Whisper | Fast, accurate, multilingual |
+| Groq Whisper | Fastest option |
+| ElevenLabs | High quality |
+| Google Speech | Broad language support |
+| Deepgram | Low latency |
+| Azure Speech | Enterprise-grade |
+| Speechmatics | Accuracy-focused |
+| Rev.ai | Async + real-time |
+| IBM Watson | On-prem option |
+
+### Custom STT Provider
+
+Same curl-template approach as AI providers. Your template receives:
+- `{{API_KEY}}` — your key
+- The audio file is sent as multipart form data
+
+Configure in Dashboard → **Audio** tab.
+
+### System Audio Capture (Windows)
+
+Phantom can transcribe audio coming **out** of your speakers — useful for meetings, videos, or any live audio.
+
+1. Dashboard → **Audio** → enable **System Audio**
+2. On first use, a setup wizard installs the virtual audio device driver
+3. Use the audio visualizer in the overlay bar to confirm capture is active
+4. Phantom transcribes in real time and streams the transcript into the response window
+
+---
+
+## Keyboard Shortcuts
+
+All shortcuts are **global** — they work even when Phantom's window isn't focused.
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl + \` | Toggle overlay visibility |
+| `Ctrl + Shift + I` | Focus the command input |
+| `Ctrl + Shift + D` | Open / close the dashboard |
+| `Ctrl + ↑ / ↓ / ← / →` | Move the overlay window |
+| `Enter` | Send message |
+| `Shift + Enter` | Insert newline |
+| `Ctrl + K` | Toggle keep-engaged mode (keep response open) |
+
+### Customizing Shortcuts
+
+Dashboard → **Shortcuts** → click any action → press your new key combination → Save.
+
+---
+
+## Dashboard Overview
+
+The dashboard (`Ctrl+Shift+D`) is your control center:
+
+| Section | What you can do |
+|---------|----------------|
+| **Chats** | Browse and search conversation history |
+| **Providers** | Add / edit / remove AI providers and API keys |
+| **Audio** | Configure STT provider, audio device, system audio |
+| **System Prompts** | Create and manage saved personas / instructions |
+| **Shortcuts** | Remap any global shortcut |
+| **Settings** | Theme, always-on-top, auto-start, clear history |
+| **Responses** | Review past AI responses with syntax-highlighted code |
+
+---
+
+## Using Screenshots
+
+1. Click the **camera icon** in the overlay bar
+2. Choose **Full screen** or drag to **select a region**
+3. The capture is automatically attached to your next message
+4. Type your question and press `Enter` — the image travels with your prompt
+
+Phantom encodes the screenshot as base64 and includes it in the API request, so models with vision support (GPT-4o, Claude 3, Gemini 1.5, etc.) can analyze it directly.
+
+---
+
+## File Attachments
+
+Click the **paperclip icon** in the overlay bar to attach files. Up to **6 files** per message. Supported formats depend on the model — most vision-capable models accept images; code models accept text files.
+
+---
+
+## Architecture (For Developers)
+
+```
+phantom/
+├── electron/
+│   └── main.cjs          # Main process: windows, IPC, HTTP proxy, shortcuts
+├── src/
+│   ├── pages/
+│   │   ├── app/          # Overlay UI (command bar)
+│   │   ├── dashboard/    # Settings hub
+│   │   ├── dev/          # Provider config pages
+│   │   ├── responses/    # Response viewer
+│   │   ├── chats/        # Conversation history
+│   │   └── ...
+│   ├── hooks/            # React hooks (completion, audio, shortcuts, etc.)
+│   ├── config/           # Provider + STT constants and curl templates
+│   ├── components/       # Shared UI components
+│   └── global.css        # All phantom-* theme classes + Tailwind
+└── package.json
+```
+
+### Key Design Decisions
+
+**Main-process HTTP proxy** — All API requests go through `ipcMain` in the Electron main process. This bypasses browser CORS restrictions entirely — no proxy server needed, no `--disable-web-security`.
+
+**Transparent frameless window** — The overlay is a `transparent: true`, `frame: false` Electron window that floats above all other apps. CSS `background: transparent` on `body` makes only your UI elements visible.
+
+**SQLite via sql.js** — Full SQL database in WASM. No native Node bindings to compile. Conversations, messages, and system prompts persist locally with no external dependency.
+
+**Secure key storage** — API keys are encrypted with `electron.safeStorage` before writing to disk. On Windows this uses DPAPI (tied to your user account).
+
+**Separate response window** — The AI response renders in a second Electron `BrowserWindow` that appears below the command bar. This sidesteps Electron's limitation where transparent windows on Windows cannot be programmatically resized after creation.
+
+**Streaming** — Responses stream token-by-token via `EventSource`-style chunked HTTP in the main process, forwarded to the renderer via IPC events.
+
+---
+
+## Privacy & Security
+
+- **No telemetry** — zero analytics, no crash reports, no usage data sent anywhere
+- **No hosted services** — 100% of network traffic goes directly from your machine to your chosen AI provider
+- **API keys encrypted at rest** — stored with `electron.safeStorage` (Windows DPAPI)
+- **Content protection** — overlay and response windows have `setContentProtection(true)` — they won't appear in screenshots or screen recordings taken by other apps
+- **Local database** — conversation history lives in your app data folder, never leaves your machine
+
+---
+
+## Contributing
+
+Phantom is GPL-3.0 open source. PRs, bug reports, and feature requests welcome.
+
+```powershell
+# Run in dev mode
+npm run dev
+
+# Type-check
+npm run typecheck
+
+# Build production bundle (renderer only)
+npm run build
+```
+
+---
+
+## Repository
+
+[github.com/debajyoti2050/phantom](https://github.com/debajyoti2050/phantom)
+
+## License
+
+GPL-3.0. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
+
+---
+
+<div align="center">
+
+Made for people who think faster than they can switch windows.
+
+</div>
