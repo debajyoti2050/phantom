@@ -1,7 +1,7 @@
 {
   "name": "phantom",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Phantom - transparent AI overlay for Windows.",
   "author": "Phantom",
   "license": "GPL-3.0",
@@ -11,9 +11,12 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1 --port 1420\" \"wait-on http://127.0.0.1:1420 && electron .\"",
     "vite": "vite --host 127.0.0.1 --port 1420",
     "electron": "electron .",
+    "icons": "node scripts/generate-icons.mjs",
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@bany/curl-to-json": "^1.2.8",
@@ -56,6 +59,9 @@
     "concurrently": "^9.2.1",
     "electron": "^39.2.3",
     "electron-builder": "^26.0.12",
+    "png-to-ico": "^3.0.1",
+    "png2icons": "^2.0.1",
+    "sharp": "^0.34.5",
     "tw-animate-css": "^1.3.6",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
@@ -68,6 +74,7 @@
       "output": "release"
     },
     "files": [
+      "build/**",
       "dist/**",
       "electron/**",
       "node_modules/sql.js/**",
@@ -76,10 +83,26 @@
       "NOTICE.md"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
       ]
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Phantom uses the microphone for voice input and transcription.",
+        "NSScreenCaptureUsageDescription": "Phantom captures screenshots so you can ask AI questions about screen content."
+      },
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     }
   }
 }

@@ -42,6 +42,14 @@ function getPreloadPath() {
   return path.join(__dirname, "preload.cjs");
 }
 
+function getAppIcon() {
+  const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
+  const iconPath = path.join(app.getAppPath(), "build", iconFile);
+  if (!fs.existsSync(iconPath)) return undefined;
+  const icon = nativeImage.createFromPath(iconPath);
+  return icon.isEmpty() ? undefined : icon;
+}
+
 function getIndexUrl(route = "/") {
   if (isDev()) {
     return `${DEV_URL}/#${route}`;
@@ -239,7 +247,9 @@ function getResponseWindowBounds() {
 }
 
 function createBaseWindow(label, options) {
+  const appIcon = getAppIcon();
   const win = new BrowserWindow({
+    ...(appIcon ? { icon: appIcon } : {}),
     ...options,
     webPreferences: {
       preload: getPreloadPath(),
