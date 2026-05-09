@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@tauri-apps/api/core": ["./src/lib/electron/tauri-core.ts"],
+      "@tauri-apps/api/event": ["./src/lib/electron/tauri-event.ts"],
+      "@tauri-apps/api/window": ["./src/lib/electron/tauri-window.ts"],
+      "@tauri-apps/api/webviewWindow": [
+        "./src/lib/electron/tauri-webview-window.ts"
+      ],
+      "@tauri-apps/plugin-autostart": [
+        "./src/lib/electron/plugin-autostart.ts"
+      ],
+      "@tauri-apps/plugin-http": ["./src/lib/electron/plugin-http.ts"],
+      "@tauri-apps/plugin-opener": ["./src/lib/electron/plugin-opener.ts"],
+      "@tauri-apps/plugin-process": ["./src/lib/electron/plugin-process.ts"],
+      "@tauri-apps/plugin-sql": ["./src/lib/electron/plugin-sql.ts"],
+      "@tauri-apps/plugin-updater": ["./src/lib/electron/plugin-updater.ts"],
+      "tauri-plugin-posthog-api": ["./src/lib/electron/posthog.ts"],
+      "tauri-plugin-macos-permissions-api": [
+        "./src/lib/electron/macos-permissions.ts"
+      ]
+    }
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
