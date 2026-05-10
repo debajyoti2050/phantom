@@ -93,6 +93,11 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Phantom uses the microphone for voice input and transcription.",
         "NSScreenCaptureUsageDescription": "Phantom captures screenshots so you can ask AI questions about screen content."
@@ -100,10 +105,7 @@
       "target": [
         "dmg",
         "zip"
-      ],
-      "identity": null,
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      ]
     }
   }
 }

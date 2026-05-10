@@ -121,7 +121,26 @@ npm run typecheck
 npm run build
 
 # Package Windows installer + portable executable
-npm run dist
+npm run dist:win
+
+# Package macOS DMG + ZIP on macOS
+npm run dist:mac
+```
+
+macOS downloads must be Developer ID signed and notarized, otherwise Gatekeeper can show `"Phantom" is damaged and can't be opened`. GitHub Actions is configured to use these repository secrets when building macOS releases:
+
+```text
+CSC_LINK
+CSC_KEY_PASSWORD
+APPLE_API_KEY
+APPLE_API_KEY_ID
+APPLE_API_ISSUER
+```
+
+`CSC_LINK` is your exported Developer ID Application certificate as a base64-encoded `.p12`. The Apple API key values come from App Store Connect. Without these secrets, the macOS artifact is useful for local testing only and may require removing quarantine manually:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Phantom.app
 ```
 
 Output lands in `dist/` — you get an NSIS installer and a portable `.exe`.
