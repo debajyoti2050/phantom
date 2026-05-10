@@ -74,7 +74,7 @@ npm install
 npm run dev
 ```
 
-The Vite dev server starts at `http://127.0.0.1:1420` and Electron launches automatically.
+The Vite dev server starts on the first free local port from `1420`, `1421`, `1422`, or `1423`, and Electron launches automatically against that URL.
 
 ### Build a Distributable
 

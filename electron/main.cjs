@@ -16,7 +16,7 @@ const path = require("node:path");
 const { Blob } = require("node:buffer");
 const initSqlJs = require("sql.js");
 
-const DEV_URL = "http://127.0.0.1:1420";
+const DEV_URL = process.env.PHANTOM_DEV_URL || "http://127.0.0.1:1420";
 const TOP_OFFSET = 54;
 const MAIN_WINDOW_WIDTH = 560;
 const MAIN_WINDOW_COLLAPSED_HEIGHT = 52;
