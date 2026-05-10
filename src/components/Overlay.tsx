@@ -185,7 +185,7 @@ const Overlay: React.FC<OverlayProps> = ({ monitorIndex }) => {
             handleCancel();
           }}
           style={{ cursor: "none" }}
-          className="fixed top-5 right-5 bg-red-500 hover:bg-red-600 text-white border-none px-5 py-2.5 rounded-lg font-sans text-sm z-[5000] transition-colors duration-200 shadow-2xl backdrop-blur-sm font-semibold"
+          className="fixed top-5 right-5 bg-rose-500 hover:bg-rose-400 text-white border-none px-5 py-2.5 rounded-lg font-sans text-sm z-[5000] transition-colors duration-200 shadow-2xl backdrop-blur-sm font-semibold"
         >
           Cancel (ESC)
         </button>

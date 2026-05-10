@@ -26,8 +26,8 @@ export const DeleteChats = ({
 
       <div className="space-y-2">
         {isDeleting && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-xs text-green-700 font-medium">
+          <div className="p-3 bg-emerald-500/10 border border-emerald-300/20 rounded-md">
+            <p className="text-xs text-emerald-100 font-medium">
               All chat history has been successfully deleted.
             </p>
           </div>

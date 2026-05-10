@@ -290,11 +290,15 @@ function createMainWindow() {
   });
   mainWindow.loadURL(getIndexUrl("/"));
   mainWindow.once("ready-to-show", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     positionMainWindow();
     mainWindow.show();
   });
   mainWindow.on("focus", () => sendToWindow(mainWindow, "focus-changed", true));
   mainWindow.on("blur", () => sendToWindow(mainWindow, "focus-changed", false));
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
 }
 
 function createDashboardWindow() {
@@ -324,6 +328,9 @@ function createDashboardWindow() {
   dashboardWindow.on("blur", () =>
     sendToWindow(dashboardWindow, "focus-changed", false)
   );
+  dashboardWindow.on("closed", () => {
+    dashboardWindow = null;
+  });
   return dashboardWindow;
 }
 
@@ -1137,10 +1144,14 @@ app.whenReady().then(async () => {
 });
 
 app.on("second-instance", () => {
-  if (mainWindow) {
-    mainWindow.show();
-    mainWindow.focus();
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createMainWindow();
+    return;
   }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  mainWindow.focus();
 });
 
 app.on("window-all-closed", () => {

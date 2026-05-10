@@ -101,7 +101,7 @@ export const QuickActions = ({
                     e.stopPropagation();
                     onRemoveAction(action);
                   }}
-                  className="ml-0.5 p-0.5 rounded-full hover:bg-red-500/20 text-red-500"
+                  className="ml-0.5 p-0.5 rounded-full hover:bg-rose-500/20 text-rose-400"
                 >
                   <Trash2Icon className="w-2.5 h-2.5" />
                 </button>

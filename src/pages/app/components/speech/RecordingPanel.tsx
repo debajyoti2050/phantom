@@ -82,7 +82,7 @@ export const RecordingPanel = ({
                 <div className="space-y-1">
                   <div className="w-full bg-muted rounded-full h-1">
                     <div
-                      className="bg-red-500 h-1 rounded-full transition-all duration-500"
+                      className="bg-rose-400 h-1 rounded-full transition-all duration-500"
                       style={{
                         width: `${(recordingProgress / maxDuration) * 100}%`,
                       }}
@@ -90,7 +90,7 @@ export const RecordingPanel = ({
                   </div>
                   <div className="flex justify-between text-[9px] text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
                       Recording {recordingProgress}s
                     </span>
                     <span>{maxDuration}s max</span>

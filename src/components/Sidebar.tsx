@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMenuItems, useVersion } from "@/hooks";
-import { CircleDotDashedIcon } from "lucide-react";
+import phantomLogoUrl from "../../build/icon.svg?url";
 
 export const Sidebar = () => {
   const { version, isLoading } = useVersion();
@@ -20,8 +20,14 @@ export const Sidebar = () => {
         title={isLoading ? "Local console" : `Local console v${version}`}
       >
         <div className="phantom-logo-frame">
-          <CircleDotDashedIcon className="size-5 transition-all duration-300" />
+          <img
+            src={phantomLogoUrl}
+            alt="Phantom"
+            className="phantom-logo-image"
+            draggable={false}
+          />
         </div>
+        <span className="phantom-logo-wordmark">Phantom</span>
       </div>
 
       {/* Navigation */}

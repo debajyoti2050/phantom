@@ -5,17 +5,17 @@ import { CustomProviders } from "./CustomProvider";
 
 export const AIProviders = (settings: UseSettingsReturn) => {
   return (
-    <div id="ai-providers" className="space-y-3">
+    <div id="ai-providers" className="space-y-4">
       <Header
         title="AI Providers"
         description="Select your preferred AI service provider to get started."
         isMainTitle
       />
 
-      {/* Custom Provider */}
-      <CustomProviders {...settings} />
       {/* Providers Selection */}
       <Providers {...settings} />
+      {/* Custom Provider */}
+      <CustomProviders {...settings} />
     </div>
   );
 };

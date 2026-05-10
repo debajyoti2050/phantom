@@ -155,9 +155,9 @@ export const SystemAudio = (props: useSystemAudioType) => {
   }, []);
 
   const getButtonIcon = () => {
-    if (setupRequired) return <AlertCircleIcon className="text-orange-500" />;
+    if (setupRequired) return <AlertCircleIcon className="text-violet-300" />;
     if (error && !setupRequired)
-      return <AlertCircleIcon className="text-red-500" />;
+      return <AlertCircleIcon className="text-rose-400" />;
     if (isProcessing) return <LoaderIcon className="animate-spin" />;
     if (capturing)
       return <RadioReceiverIcon className="text-primary animate-pulse" />;
@@ -312,13 +312,13 @@ export const SystemAudio = (props: useSystemAudioType) => {
 
                 {/* Error Display */}
                 {error && !setupRequired && (
-                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-red-50 border border-red-200">
-                    <AlertCircleIcon className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-400/20">
+                    <AlertCircleIcon className="w-3.5 h-3.5 text-rose-300 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[10px] font-medium text-red-800">
+                      <p className="text-[10px] font-medium text-rose-100">
                         Error
                       </p>
-                      <p className="text-[10px] text-red-700">{error}</p>
+                      <p className="text-[10px] text-rose-200">{error}</p>
                     </div>
                   </div>
                 )}

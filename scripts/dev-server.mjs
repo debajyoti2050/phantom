@@ -1,9 +1,15 @@
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import http from "node:http";
 import net from "node:net";
+import path from "node:path";
 
 const HOST = "127.0.0.1";
 const PORTS = [1420, 1421, 1422, 1423];
+const require = createRequire(import.meta.url);
+const electronPath = require("electron");
+const vitePackagePath = require.resolve("vite/package.json");
+const viteBinPath = path.join(path.dirname(vitePackagePath), "bin", "vite.js");
 
 function isPortFree(port) {
   return new Promise((resolve) => {
@@ -53,7 +59,6 @@ function spawnProcess(command, args, env = {}) {
     cwd: process.cwd(),
     env: { ...process.env, ...env },
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
 }
 
@@ -62,9 +67,13 @@ const devUrl = `http://${HOST}:${port}`;
 
 console.log(`Phantom dev server using ${devUrl}`);
 
-const vite = spawnProcess("vite", ["--host", HOST, "--port", String(port), "--strictPort"], {
-  PHANTOM_DEV_PORT: String(port),
-});
+const vite = spawnProcess(
+  process.execPath,
+  [viteBinPath, "--host", HOST, "--port", String(port), "--strictPort"],
+  {
+    PHANTOM_DEV_PORT: String(port),
+  }
+);
 let electron;
 let shuttingDown = false;
 
@@ -85,7 +94,7 @@ vite.on("exit", (code) => {
 
 await waitForUrl(devUrl);
 
-electron = spawnProcess("electron", ["."], {
+electron = spawnProcess(electronPath, ["."], {
   PHANTOM_DEV_URL: devUrl,
 });
 

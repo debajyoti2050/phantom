@@ -2,14 +2,19 @@
 
 # 👻 Phantom
 
-**A transparent AI overlay for your Windows desktop.**  
-Ask anything, attach screenshots, transcribe audio — all without leaving your workflow.
+**The open-source Cluely alternative for Windows.**
+A stealth AI overlay that gives you real-time answers during meetings, interviews, and coding sessions — without switching windows or paying a subscription.
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078d4?logo=windows)](https://github.com)
 [![Built with Electron](https://img.shields.io/badge/Electron-39-47848f?logo=electron)](https://electronjs.org)
 [![React](https://img.shields.io/badge/React-18-61dafb?logo=react)](https://react.dev)
 [![No Telemetry](https://img.shields.io/badge/Telemetry-None-brightgreen)](README.md)
+[![Free Forever](https://img.shields.io/badge/Price-Free%20Forever-success)](README.md)
+
+---
+
+<img src="PhantomBanner.png" alt="Phantom — Your invisible personal assistant" width="100%" />
 
 ---
 
@@ -21,13 +26,22 @@ Ask anything, attach screenshots, transcribe audio — all without leaving your 
 
 ## What is Phantom?
 
-Phantom is a **floating AI command bar** that lives on top of every window on your screen — invisible until you need it. Press a shortcut, type a question, get an answer. It never gets in your way.
+Phantom is a **transparent AI assistant overlay** that floats invisibly on top of every window on your screen. It is a free, open-source alternative to Cluely — built for anyone who wants real-time AI help during live situations without paying $20–$40/month.
 
-- Works **on top of any application** — games, browsers, editors, terminals
-- Connects to **any AI provider** — OpenAI, Claude, Gemini, Grok, or your own
-- **No subscription, no telemetry, no cloud sync** — your API key, your data
-- Transcribes your **microphone or system audio** in real time
-- Attaches **screenshots** and **files** to any message
+**Use it for:**
+- **Job interviews** — get instant answers to technical questions while screen-sharing
+- **Online meetings** — ask AI about anything being discussed without switching tabs
+- **Coding sessions** — paste errors, get fixes, never leave your editor
+- **Research & writing** — screenshot any content and ask questions about it instantly
+- **Any task** — it lives above every app, always a shortcut away
+
+**How it works:** Press `Ctrl+\` to show the bar. Type your question (or attach a screenshot). Get a streaming AI response in a floating window below. Press `Ctrl+\` again to hide everything. Nobody sees it.
+
+- Floats **invisibly above every application** — protected from screenshots and screen recordings
+- Connects to **any AI provider** — OpenAI, Claude, Gemini, Grok, Mistral, and more
+- **No subscription, no cloud account, no telemetry** — your key, your data, your machine
+- Transcribes **microphone and system audio** in real time
+- Attaches **screenshots and files** to any message
 
 ---
 
@@ -51,6 +65,27 @@ Phantom is a **floating AI command bar** that lives on top of every window on yo
 
 ---
 
+## Phantom vs Cluely
+
+Cluely (and tools like it) are paid, closed-source screen AI assistants. Phantom gives you the same core capability — a stealth overlay that answers questions in real time — with zero cost and full control over your data.
+
+| | Phantom | Cluely |
+|---|---|---|
+| **Price** | Free forever | $20–$40/month |
+| **Open source** | ✅ GPL-3.0 | ❌ Closed |
+| **AI provider** | Any (your own key) | Locked to their API |
+| **Data privacy** | 100% local | Sent to their servers |
+| **Telemetry** | None | Yes |
+| **Custom providers** | ✅ Any curl-compatible API | ❌ |
+| **System audio** | ✅ Windows loopback | ✅ |
+| **Screenshot analysis** | ✅ Full & region capture | ✅ |
+| **Platform** | Windows (Mac WIP) | Mac + Windows |
+| **Screen recording protection** | ✅ | ✅ |
+
+> Phantom won't auto-generate interview answers or do real-time meeting summaries out of the box — those are prompting strategies you configure with your own system prompts. What Phantom does is put any AI model one keystroke away, invisible, above every window.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -64,7 +99,7 @@ Phantom is a **floating AI command bar** that lives on top of every window on yo
 
 ```powershell
 # Clone the repo
-git clone https://github.com/your-username/phantom.git
+git clone https://github.com/debajyoti2050/phantom.git
 cd phantom
 
 # Install dependencies
@@ -359,5 +394,9 @@ GPL-3.0. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
 <div align="center">
 
 Made for people who think faster than they can switch windows.
+
+---
+
+**Keywords:** Cluely alternative · open source Cluely · AI overlay Windows · invisible AI assistant · meeting AI assistant · interview AI assistant · real-time AI help · screen overlay AI · stealth AI · AI assistant that stays on screen · free Cluely alternative · AI during interviews · AI for meetings · coding AI overlay
 
 </div>
