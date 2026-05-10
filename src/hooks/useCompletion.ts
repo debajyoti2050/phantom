@@ -870,6 +870,18 @@ export const useCompletion = () => {
         return;
       }
 
+      if (action === "submit_follow_up") {
+        const text = String(event.payload?.text || "").trim();
+        if (!text || state.isLoading) {
+          return;
+        }
+
+        setKeepEngaged(true);
+        setMessageHistoryOpen(false);
+        submit(text);
+        return;
+      }
+
       if (action === "close") {
         cancel();
         if (keepEngaged) {
@@ -894,7 +906,14 @@ export const useCompletion = () => {
     return () => {
       unlisten?.();
     };
-  }, [state.isLoading, keepEngaged, cancel, reset, startNewConversation]);
+  }, [
+    state.isLoading,
+    keepEngaged,
+    cancel,
+    reset,
+    startNewConversation,
+    submit,
+  ]);
 
   // Auto scroll to bottom when response updates
   useEffect(() => {

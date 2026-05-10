@@ -252,6 +252,12 @@ function getResponseWindowBounds() {
   };
 }
 
+function syncResponseWindowToMain() {
+  if (responseWindow && !responseWindow.isDestroyed()) {
+    responseWindow.setBounds(getResponseWindowBounds(), false);
+  }
+}
+
 function createBaseWindow(label, options) {
   const appIcon = getAppIcon();
   const win = new BrowserWindow({
@@ -296,6 +302,7 @@ function createMainWindow() {
   });
   mainWindow.on("focus", () => sendToWindow(mainWindow, "focus-changed", true));
   mainWindow.on("blur", () => sendToWindow(mainWindow, "focus-changed", false));
+  mainWindow.on("move", syncResponseWindowToMain);
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -345,7 +352,7 @@ function createResponseWindow() {
     frame: false,
     transparent: true,
     resizable: false,
-    movable: false,
+    movable: true,
     show: false,
     skipTaskbar: true,
     alwaysOnTop: true,
@@ -372,7 +379,7 @@ function updateResponseWindow(state) {
   }
 
   const win = createResponseWindow();
-  win.setBounds(getResponseWindowBounds(), false);
+  syncResponseWindowToMain();
   win.setIgnoreMouseEvents(false);
   if (mainWindow && !mainWindow.isDestroyed()) {
     win.setAlwaysOnTop(true);
@@ -478,9 +485,7 @@ function moveMainWindow(direction, step = 12) {
   }[direction];
   if (next) {
     mainWindow.setPosition(next[0], next[1]);
-    if (responseWindow && !responseWindow.isDestroyed() && responseWindow.isVisible()) {
-      responseWindow.setBounds(getResponseWindowBounds(), false);
-    }
+    syncResponseWindowToMain();
   }
 }
 

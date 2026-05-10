@@ -127,7 +127,9 @@ npm run dist:win
 npm run dist:mac
 ```
 
-macOS downloads must be Developer ID signed and notarized, otherwise Gatekeeper can show `"Phantom" is damaged and can't be opened`. GitHub Actions is configured to use these repository secrets when building macOS releases:
+macOS builds are unsigned by default because Phantom is personal local software. GitHub Actions does not require Apple signing secrets for normal personal releases.
+
+If you later want a Gatekeeper-safe macOS release that opens normally after browser download on any Mac, add these optional GitHub repository secrets:
 
 ```text
 CSC_LINK
@@ -137,13 +139,13 @@ APPLE_API_KEY_ID
 APPLE_API_ISSUER
 ```
 
-`CSC_LINK` is your exported Developer ID Application certificate as a base64-encoded `.p12`. The Apple API key values come from App Store Connect. Without these secrets, the macOS artifact is useful for local testing only and may require removing quarantine manually:
+`CSC_LINK` is your exported Developer ID Application certificate as a base64-encoded `.p12`. The Apple API key values come from App Store Connect. Without these optional secrets, the macOS artifact stays unsigned. If macOS blocks a browser-downloaded unsigned app, remove quarantine once:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Phantom.app
 ```
 
-Output lands in `dist/` — you get an NSIS installer and a portable `.exe`.
+Output lands in `release/`. Windows builds produce an NSIS installer and a portable `.exe`; macOS builds produce `.dmg` and `.zip` artifacts.
 
 ---
 

@@ -1,10 +1,12 @@
-import { useEffect, useRef } from "react";
-import { MousePointer2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { HandGrabIcon, MousePointer2 } from "lucide-react";
 
 export const CustomCursor = () => {
   const cursorRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef({ x: 0, y: 0 });
   const isVisibleRef = useRef(false);
+  const isDragHoverRef = useRef(false);
+  const [isDragHover, setIsDragHover] = useState(false);
 
   useEffect(() => {
     let rafId: number;
@@ -18,6 +20,15 @@ export const CustomCursor = () => {
 
     const handleMouseMove = (e: MouseEvent) => {
       positionRef.current = { x: e.clientX, y: e.clientY };
+      const target = e.target as HTMLElement | null;
+      const nextIsDragHover = Boolean(
+        target?.closest('[data-tauri-drag-region="true"]')
+      );
+
+      if (isDragHoverRef.current !== nextIsDragHover) {
+        isDragHoverRef.current = nextIsDragHover;
+        setIsDragHover(nextIsDragHover);
+      }
 
       if (!isVisibleRef.current) {
         isVisibleRef.current = true;
@@ -66,7 +77,11 @@ export const CustomCursor = () => {
         transition: "opacity 0.1s ease-out",
       }}
     >
-      <MousePointer2 className="w-5 h-5 drop-shadow-2xl fill-secondary stroke-primary" />
+      {isDragHover ? (
+        <HandGrabIcon className="h-5 w-5 drop-shadow-2xl fill-secondary stroke-primary" />
+      ) : (
+        <MousePointer2 className="h-5 w-5 drop-shadow-2xl fill-secondary stroke-primary" />
+      )}
     </div>
   );
 };

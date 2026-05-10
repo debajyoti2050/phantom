@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   AlertTriangleIcon,
   BrainCircuitIcon,
   CheckCircle2Icon,
   CopyIcon,
+  GripIcon,
   Loader2,
   PinIcon,
+  SendHorizontalIcon,
   XIcon,
 } from "lucide-react";
-import { Button, Markdown, ScrollArea, Switch } from "@/components";
+import { Button, Input, Markdown, ScrollArea, Switch } from "@/components";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -41,6 +43,7 @@ const emptyState: ResponseWindowState = {
 
 export function ResponseOverlayWindow() {
   const [state, setState] = useState<ResponseWindowState>(emptyState);
+  const [followUp, setFollowUp] = useState("");
   const stateLabel = state.error
     ? "Error"
     : state.isLoading
@@ -86,11 +89,26 @@ export function ResponseOverlayWindow() {
     await navigator.clipboard.writeText(content);
   };
 
+  const submitFollowUp = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const text = followUp.trim();
+    if (!text || state.isLoading) return;
+
+    setFollowUp("");
+    await invoke("response_window_action", {
+      action: "submit_follow_up",
+      text,
+    });
+  };
+
   return (
     <div className="phantom-response-native-root">
       <div className="phantom-response-window is-native">
-        <div className="phantom-response-header">
+        <div className="phantom-response-header" data-tauri-drag-region={true}>
           <div className="flex min-w-0 flex-row items-center gap-2">
+            <div className="phantom-response-drag-handle" title="Move response">
+              <GripIcon className="size-3.5" />
+            </div>
             <div className="phantom-response-icon">
               <BrainCircuitIcon className="size-4" />
             </div>
@@ -117,7 +135,10 @@ export function ResponseOverlayWindow() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 select-none">
+          <div
+            className="flex items-center gap-2 select-none"
+            data-tauri-no-drag-region={true}
+          >
             <div
               className="flex flex-row items-center gap-2"
               title="Keep panel open"
@@ -220,6 +241,33 @@ export function ResponseOverlayWindow() {
             )}
           </div>
         </ScrollArea>
+
+        <form
+          className="phantom-response-followup"
+          onSubmit={submitFollowUp}
+          data-tauri-no-drag-region={true}
+        >
+          <Input
+            value={followUp}
+            onChange={(event) => setFollowUp(event.target.value)}
+            placeholder="Continue this conversation..."
+            disabled={state.isLoading}
+            className="phantom-response-followup-input"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            className="phantom-response-followup-send"
+            disabled={!followUp.trim() || state.isLoading}
+            title="Send follow-up"
+          >
+            {state.isLoading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <SendHorizontalIcon />
+            )}
+          </Button>
+        </form>
       </div>
     </div>
   );

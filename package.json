@@ -1,7 +1,7 @@
 {
   "name": "phantom",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Phantom - transparent AI overlay for Windows.",
   "author": "Phantom",
   "license": "GPL-3.0",
@@ -16,7 +16,7 @@
     "build": "tsc && vite build",
     "dist": "npm run build && electron-builder --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --publish never"
+    "dist:mac": "npm run build && node scripts/package-mac.mjs"
   },
   "dependencies": {
     "@bany/curl-to-json": "^1.2.8",
@@ -93,11 +93,10 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
+      "identity": null,
+      "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "notarize": true,
+      "notarize": false,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Phantom uses the microphone for voice input and transcription.",
         "NSScreenCaptureUsageDescription": "Phantom captures screenshots so you can ask AI questions about screen content."

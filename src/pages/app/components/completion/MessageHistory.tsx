@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { MessageSquareText, ChevronUp, ChevronDown } from "lucide-react";
 import {
   Popover,
@@ -23,13 +24,22 @@ export const MessageHistory = ({
   messageHistoryOpen,
   setMessageHistoryOpen,
 }: MessageHistoryProps) => {
+  const toggleHistory = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMessageHistoryOpen(!messageHistoryOpen);
+  };
+
   return (
     <Popover open={messageHistoryOpen} onOpenChange={setMessageHistoryOpen}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           size="icon"
           variant="outline"
           aria-label="View Current Conversation"
+          title="View current conversation"
+          onClick={toggleHistory}
           className="relative cursor-pointer w-12 h-7 px-2 flex gap-1 items-center justify-center"
         >
           <div className="flex items-center justify-center text-xs font-medium">

@@ -796,7 +796,7 @@
   }
 
   .phantom-response-scroll.is-native {
-    height: calc(100vh - 4.4rem);
+    height: calc(100vh - 8.15rem);
     min-height: 0;
   }
 
@@ -809,6 +809,24 @@
     background: rgba(5, 10, 22, 0.72);
     padding: 0.72rem 0.9rem;
     border-radius: 0.9rem 0.9rem 0 0;
+  }
+
+  .phantom-response-drag-handle {
+    display: grid;
+    height: 1.6rem;
+    width: 1.6rem;
+    place-items: center;
+    color: rgba(203, 213, 225, 0.66);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 0.55rem;
+    background: rgba(255, 255, 255, 0.035);
+    transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+  }
+
+  .phantom-response-drag-handle:hover {
+    color: var(--primary);
+    border-color: rgba(125, 211, 252, 0.34);
+    background: rgba(56, 189, 248, 0.1);
   }
 
   .phantom-response-icon {
@@ -913,6 +931,38 @@
 
   .phantom-history-item.is-assistant {
     background: rgba(255, 255, 255, 0.035);
+  }
+
+  .phantom-response-followup {
+    display: flex;
+    gap: 0.55rem;
+    align-items: center;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    background:
+      linear-gradient(90deg, rgba(56, 189, 248, 0.055), transparent 52%, rgba(139, 92, 246, 0.05)),
+      rgba(5, 10, 22, 0.78);
+    padding: 0.72rem;
+  }
+
+  .phantom-response-followup-input {
+    height: 2.35rem !important;
+    border-color: rgba(148, 163, 184, 0.2) !important;
+    background: rgba(3, 7, 18, 0.78) !important;
+    color: var(--foreground) !important;
+    border-radius: 0.7rem !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  }
+
+  .phantom-response-followup-input:focus-visible {
+    border-color: rgba(125, 211, 252, 0.5) !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  }
+
+  .phantom-response-followup-send {
+    height: 2.35rem !important;
+    width: 2.35rem !important;
+    border-radius: 0.7rem !important;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.18) !important;
   }
 
   .phantom-setting-panel {
@@ -1167,6 +1217,11 @@
 
 [data-tauri-drag-region]:active {
   cursor: grabbing !important;
+}
+
+[data-tauri-no-drag-region],
+[data-tauri-no-drag-region] * {
+  -webkit-app-region: no-drag;
 }
 
 html {
