@@ -1,6 +1,7 @@
 export const AI_PROVIDERS = [
   {
     id: "openai",
+    name: "OpenAI",
     curl: `curl https://api.openai.com/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer {{API_KEY}}" \\
@@ -13,6 +14,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "claude",
+    name: "Anthropic Claude",
     curl: `curl https://api.anthropic.com/v1/messages \\
   -H "x-api-key: {{API_KEY}}" \\
   -H "anthropic-version: 2023-06-01" \\
@@ -29,6 +31,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "grok",
+    name: "xAI Grok",
     curl: `curl https://api.x.ai/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer {{API_KEY}}" \\
@@ -41,6 +44,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "gemini",
+    name: "Gemini",
     curl: `curl "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" \\
   -H "Authorization: Bearer {{API_KEY}}" \\
   -H "Content-Type: application/json" \\
@@ -52,7 +56,27 @@ export const AI_PROVIDERS = [
     streaming: true,
   },
   {
+    id: "nvidia-nim",
+    name: "NVIDIA NIM",
+    curl: `curl https://integrate.api.nvidia.com/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer {{API_KEY}}" \\
+  -H "Accept: text/event-stream" \\
+  -d '{
+    "model": "{{MODEL}}",
+    "messages": [{"role": "system", "content": "{{SYSTEM_PROMPT}}"}, {"role": "user", "content": [{"type": "text", "text": "{{TEXT}}"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,{{IMAGE}}"}}]}],
+    "max_tokens": 16384,
+    "temperature": 1,
+    "top_p": 1,
+    "stream": true,
+    "chat_template_kwargs": {"thinking": true}
+  }'`,
+    responseContentPath: "choices[0].message.content",
+    streaming: true,
+  },
+  {
     id: "mistral",
+    name: "Mistral",
     curl: `curl https://api.mistral.ai/v1/chat/completions \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer {{API_KEY}}" \\
@@ -65,6 +89,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "cohere",
+    name: "Cohere",
     curl: `curl -X POST https://api.cohere.ai/v2/chat \\
     -H "Authorization: Bearer {{API_KEY}}" \\
     -H "Content-Type: application/json" \\
@@ -78,6 +103,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "groq",
+    name: "Groq",
     curl: `curl https://api.groq.com/openai/v1/chat/completions \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer {{API_KEY}}" \
@@ -96,6 +122,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "perplexity",
+    name: "Perplexity",
     curl: `curl -X POST https://api.perplexity.ai/chat/completions \\
   -H "Authorization: Bearer {{API_KEY}}" \\
   -H "Content-Type: application/json" \\
@@ -108,6 +135,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "openrouter",
+    name: "OpenRouter",
     curl: `  curl https://openrouter.ai/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {{API_KEY}}" \
@@ -120,6 +148,7 @@ export const AI_PROVIDERS = [
   },
   {
     id: "ollama",
+    name: "Ollama",
     curl: `curl -X POST http://localhost:11434/v1/chat/completions \\
     -H "Authorization: Bearer {{API_KEY}}" \\
     -H "Content-Type: application/json" \\

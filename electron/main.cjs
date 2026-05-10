@@ -896,6 +896,7 @@ function maskKey(key) {
 
 const defaultModels = [
   { provider: "openai", name: "OpenAI", id: "gpt-4.1-mini", model: "gpt-4.1-mini", description: "OpenAI-compatible chat model", modality: "text,image", isAvailable: true },
+  { provider: "nvidia-nim", name: "NVIDIA NIM", id: "moonshotai/kimi-k2.6", model: "moonshotai/kimi-k2.6", description: "NVIDIA hosted NIM OpenAI-compatible model", modality: "text,image", isAvailable: true },
   { provider: "openrouter", name: "OpenRouter", id: "openrouter", model: "openai/gpt-4.1-mini", description: "OpenRouter model", modality: "text,image", isAvailable: true },
   { provider: "ollama", name: "Ollama", id: "llama3.2", model: "llama3.2", description: "Local Ollama model", modality: "text", isAvailable: true },
 ];

@@ -13,6 +13,12 @@ export const Providers = ({
   const [localSelectedProvider, setLocalSelectedProvider] =
     useState<ResultJSON | null>(null);
 
+  const selectedProvider = allAiProviders?.find(
+    (p) => p?.id === selectedAIProvider?.provider
+  );
+  const selectedProviderName =
+    selectedProvider?.name || selectedAIProvider?.provider || "AI provider";
+
   useEffect(() => {
     if (selectedAIProvider?.provider) {
       const provider = allAiProviders?.find(
@@ -53,7 +59,7 @@ export const Providers = ({
             return {
               label: provider?.isCustom
                 ? json?.url || "Custom Provider"
-                : provider?.id || "Custom Provider",
+                : provider?.name || provider?.id || "Custom Provider",
               value: provider?.id || "Custom Provider",
               isCustom: provider?.isCustom,
             };
@@ -82,11 +88,9 @@ export const Providers = ({
           <Header
             title="API Key"
             description={`Enter your ${
-              allAiProviders?.find(
-                (p) => p?.id === selectedAIProvider?.provider
-              )?.isCustom
+              selectedProvider?.isCustom
                 ? "Custom Provider"
-                : selectedAIProvider?.provider
+                : selectedProviderName
             } API key to authenticate and access AI models. Your key is stored locally and never shared.`}
           />
 
@@ -192,20 +196,16 @@ export const Providers = ({
                     /_/g,
                     " "
                   )} for ${
-                    allAiProviders?.find(
-                      (p) => p?.id === selectedAIProvider?.provider
-                    )?.isCustom
+                    selectedProvider?.isCustom
                       ? "Custom Provider"
-                      : selectedAIProvider?.provider
+                      : selectedProviderName
                   }`}
                 />
                 <TextInput
                   placeholder={`Enter ${
-                    allAiProviders?.find(
-                      (p) => p?.id === selectedAIProvider?.provider
-                    )?.isCustom
+                    selectedProvider?.isCustom
                       ? "Custom Provider"
-                      : selectedAIProvider?.provider
+                      : selectedProviderName
                   } ${variable?.key?.replace(/_/g, " ") || "value"}`}
                   value={getVariableValue()}
                   onChange={(value) => {

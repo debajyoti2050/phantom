@@ -63,7 +63,7 @@ export const CreateEditProvider = ({
                   ?.filter((provider) => !provider?.isCustom)
                   .map((provider) => {
                     return {
-                      label: provider?.id || "AI Provider",
+                      label: provider?.name || provider?.id || "AI Provider",
                       value: provider?.id || "AI Provider",
                     };
                   })}

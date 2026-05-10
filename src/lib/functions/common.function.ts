@@ -211,6 +211,8 @@ export function getStreamingContent(
     defaultPath.replace(".message.", ".delta."),
     // 2. Then, add other common patterns.
     "choices[0].delta.content", // OpenAI, Groq, Mistral, Perplexity
+    "choices[0].delta.reasoning_content", // NVIDIA NIM thinking models
+    "choices[0].message.reasoning_content",
     "candidates[0].content.parts[0].text", // Gemini
     "delta.text", // Claude
     "text", // Cohere
