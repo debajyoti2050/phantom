@@ -221,14 +221,24 @@ export async function* fetchAIResponse(params: {
       );
     }
 
+    const selectedVariables = {
+      ...(selectedProvider.variables || {}),
+    };
+    if (
+      provider.defaultModel &&
+      (!selectedVariables.model || selectedVariables.model.trim() === "")
+    ) {
+      selectedVariables.model = provider.defaultModel;
+    }
+
     const extractedVariables = extractVariables(provider.curl);
     const requiredVars = extractedVariables.filter(
       ({ key }) => key !== "SYSTEM_PROMPT" && key !== "TEXT" && key !== "IMAGE"
     );
     for (const { key } of requiredVars) {
       if (
-        !selectedProvider.variables?.[key] ||
-        selectedProvider.variables[key].trim() === ""
+        !selectedVariables[key] ||
+        selectedVariables[key].trim() === ""
       ) {
         throw new Error(
           `Missing required variable: ${key}. Please configure it in settings.`
@@ -264,7 +274,7 @@ export async function* fetchAIResponse(params: {
 
     const allVariables = {
       ...Object.fromEntries(
-        Object.entries(selectedProvider.variables).map(([key, value]) => [
+        Object.entries(selectedVariables).map(([key, value]) => [
           key.toUpperCase(),
           value,
         ])

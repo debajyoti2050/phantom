@@ -61,6 +61,9 @@ export default defineConfig(async () => ({
     },
   },
   clearScreen: false,
+  build: {
+    chunkSizeWarningLimit: 10000,
+  },
   server: {
     port: Number(process.env.PHANTOM_DEV_PORT || 1420),
     strictPort: true,

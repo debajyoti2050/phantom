@@ -1156,7 +1156,10 @@ export const useCompletion = () => {
     } catch (error) {
       setState((prev) => ({
         ...prev,
-        error: "Failed to capture screenshot. Please try again.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to capture screenshot. Please try again.",
         notice: null,
       }));
       isProcessingScreenshotRef.current = false;
