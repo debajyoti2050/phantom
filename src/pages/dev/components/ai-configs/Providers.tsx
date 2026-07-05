@@ -184,9 +184,11 @@ export const Providers = ({
   }, [allAiProviders, selectedAIProvider?.provider]);
 
   const setSelectedProvider = (provider: string) => {
+    const nextProvider = allAiProviders?.find((p) => p?.id === provider);
+    const defaultModel = nextProvider?.defaultModel?.trim();
     onSetSelectedAIProvider({
       provider,
-      variables: {},
+      variables: defaultModel ? { model: defaultModel } : {},
     });
     setShowApiKey(false);
   };
