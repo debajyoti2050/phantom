@@ -71,6 +71,9 @@ const SCREENSHOT_AUTO_DEFAULT_MIGRATION_KEY =
   "phantom_screenshot_auto_default_migrated";
 const ALWAYS_ON_TOP_DEFAULT_MIGRATION_KEY =
   "phantom_always_on_top_default_enabled_migrated";
+const GEMINI_SHUT_DOWN_MODEL_MIGRATIONS: Record<string, string> = {
+  "gemini-2.0-flash": "gemini-3.5-flash",
+};
 
 // Create the provider component
 export const AppProvider = ({ children }: { children: ReactNode }) => {
@@ -263,7 +266,31 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       STORAGE_KEYS.SELECTED_AI_PROVIDER
     );
     if (savedSelectedAi) {
-      setSelectedAIProvider(JSON.parse(savedSelectedAi));
+      try {
+        const parsed = JSON.parse(savedSelectedAi);
+        if (
+          parsed?.provider === "gemini" &&
+          parsed.variables?.model &&
+          GEMINI_SHUT_DOWN_MODEL_MIGRATIONS[parsed.variables.model]
+        ) {
+          const migrated = {
+            ...parsed,
+            variables: {
+              ...parsed.variables,
+              model: GEMINI_SHUT_DOWN_MODEL_MIGRATIONS[parsed.variables.model],
+            },
+          };
+          safeLocalStorage.setItem(
+            STORAGE_KEYS.SELECTED_AI_PROVIDER,
+            JSON.stringify(migrated)
+          );
+          setSelectedAIProvider(migrated);
+        } else {
+          setSelectedAIProvider(parsed);
+        }
+      } catch {
+        console.warn("Failed to parse selected AI provider");
+      }
     }
 
     // Load selected STT provider

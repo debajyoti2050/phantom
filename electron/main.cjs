@@ -10,6 +10,7 @@ const {
   screen,
   session,
   shell,
+  systemPreferences,
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -84,6 +85,32 @@ function sendToWindow(win, event, payload) {
   if (win && !win.isDestroyed()) {
     win.webContents.send("phantom:event", { event, payload });
   }
+}
+
+function hasScreenRecordingPermission() {
+  if (process.platform !== "darwin") return true;
+  try {
+    return systemPreferences.getMediaAccessStatus("screen") === "granted";
+  } catch {
+    return false;
+  }
+}
+
+async function openScreenRecordingSettings() {
+  if (process.platform !== "darwin") return null;
+  await shell.openExternal(
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+  );
+  return null;
+}
+
+function getScreenCaptureError() {
+  if (process.platform === "darwin" && !hasScreenRecordingPermission()) {
+    return new Error(
+      "Screen Recording permission is required. Enable Phantom/Electron in System Settings > Privacy & Security > Screen & System Audio Recording, then restart the app."
+    );
+  }
+  return new Error("Screen capture returned an empty image");
 }
 
 function emitToAll(event, payload) {
@@ -1387,29 +1414,80 @@ async function dbSelect(sql, params = []) {
   return rows;
 }
 
+function getCaptureThumbnailSizes(display) {
+  const scaleFactor = Number(display.scaleFactor || 1);
+  const bounds = display.bounds || display.size || { width: 1920, height: 1080 };
+  const size = display.size || bounds;
+  return [
+    {
+      width: Math.round(size.width * scaleFactor),
+      height: Math.round(size.height * scaleFactor),
+    },
+    {
+      width: Math.round(bounds.width * scaleFactor),
+      height: Math.round(bounds.height * scaleFactor),
+    },
+    {
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+    },
+    { width: 1920, height: 1080 },
+    { width: 1280, height: 720 },
+  ].filter(
+    (thumbnailSize, index, sizes) =>
+      thumbnailSize.width > 0 &&
+      thumbnailSize.height > 0 &&
+      sizes.findIndex(
+        (sizeItem) =>
+          sizeItem.width === thumbnailSize.width &&
+          sizeItem.height === thumbnailSize.height
+      ) === index
+  );
+}
+
 async function getScreenSourceForDisplay(display) {
+  let fallbackSource;
+  for (const thumbnailSize of getCaptureThumbnailSizes(display)) {
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize,
+    });
+    const source =
+      sources.find((item) => String(item.display_id) === String(display.id)) ||
+      sources[0];
+    if (!fallbackSource && source) {
+      fallbackSource = source;
+    }
+    if (source?.thumbnail && !source.thumbnail.isEmpty()) {
+      return source;
+    }
+  }
+
   const sources = await desktopCapturer.getSources({
     types: ["screen"],
-    thumbnailSize: {
-      width: Math.round(display.size.width * display.scaleFactor),
-      height: Math.round(display.size.height * display.scaleFactor),
-    },
   });
   return (
     sources.find((source) => String(source.display_id) === String(display.id)) ||
-    sources[0]
+    sources[0] ||
+    fallbackSource
   );
 }
 
 async function captureDisplayBase64(display) {
+  if (!hasScreenRecordingPermission()) {
+    throw getScreenCaptureError();
+  }
   const source = await getScreenSourceForDisplay(display);
   if (!source?.thumbnail || source.thumbnail.isEmpty()) {
-    throw new Error("Screen capture returned an empty image");
+    throw getScreenCaptureError();
   }
   return source.thumbnail.toPNG().toString("base64");
 }
 
 async function startSelectionCapture() {
+  if (!hasScreenRecordingPermission()) {
+    throw getScreenCaptureError();
+  }
   captureImages.clear();
   const displays = screen.getAllDisplays();
   const selectedDisplayIds = new Set(
@@ -1420,6 +1498,9 @@ async function startSelectionCapture() {
     if (!selectedDisplayIds.has(String(display.id))) continue;
 
     const source = await getScreenSourceForDisplay(display);
+    if (!source?.thumbnail || source.thumbnail.isEmpty()) {
+      throw getScreenCaptureError();
+    }
     captureImages.set(index, {
       image: source.thumbnail,
       display,
@@ -1484,6 +1565,7 @@ function maskKey(key) {
 
 const defaultModels = [
   { provider: "openai", name: "OpenAI", id: "gpt-4.1-mini", model: "gpt-4.1-mini", description: "OpenAI-compatible chat model", modality: "text,image", isAvailable: true },
+  { provider: "gemini", name: "Gemini", id: "gemini-3.5-flash", model: "gemini-3.5-flash", description: "Google Gemini OpenAI-compatible chat model", modality: "text,image", isAvailable: true },
   { provider: "nvidia-nim", name: "NVIDIA NIM", id: "moonshotai/kimi-k2.6", model: "moonshotai/kimi-k2.6", description: "NVIDIA hosted NIM OpenAI-compatible model", modality: "text,image", isAvailable: true },
   { provider: "openrouter", name: "OpenRouter", id: "openrouter", model: "openai/gpt-4.1-mini", description: "OpenRouter model", modality: "text,image", isAvailable: true },
   { provider: "ollama", name: "Ollama", id: "llama3.2", model: "llama3.2", description: "Local Ollama model", modality: "text", isAvailable: true },
@@ -1632,10 +1714,15 @@ async function handleInvoke(command, args = {}) {
     case "get_activity":
       return { success: true, data: [], total_tokens_used: 0 };
     case "capture_to_base64":
+    case "capture_screenshot":
       return captureDisplayBase64(getTargetDisplayForMainWindow());
     case "start_screen_capture":
       await startSelectionCapture();
       return null;
+    case "check_screen_recording_permission":
+      return hasScreenRecordingPermission();
+    case "request_screen_recording_permission":
+      return openScreenRecordingSettings();
     case "capture_selected_area": {
       const monitorIndex = Number(args.monitorIndex ?? args.monitor_index ?? 0);
       const stored = captureImages.get(monitorIndex);
