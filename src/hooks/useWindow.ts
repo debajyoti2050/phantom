@@ -1,9 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useCallback, useEffect } from "react";
-
-const COLLAPSED_WINDOW_HEIGHT = 64;
-const EXPANDED_WINDOW_HEIGHT = 720;
+import { useOverlayScale } from "./useOverlayScale";
 
 // Helper function to check if any overlay surface is open in the DOM
 const isAnyExpandedSurfaceOpen = (): boolean => {
@@ -14,6 +12,8 @@ const isAnyExpandedSurfaceOpen = (): boolean => {
 };
 
 export const useWindowResize = () => {
+  const { metrics } = useOverlayScale();
+
   const resizeWindow = useCallback(async (expanded: boolean) => {
     try {
       if (!expanded && isAnyExpandedSurfaceOpen()) {
@@ -21,8 +21,8 @@ export const useWindowResize = () => {
       }
 
       const newHeight = expanded
-        ? EXPANDED_WINDOW_HEIGHT
-        : COLLAPSED_WINDOW_HEIGHT;
+        ? metrics.expandedHeight
+        : metrics.collapsedHeight;
 
       await invoke("set_window_height", {
         height: newHeight,
@@ -30,7 +30,7 @@ export const useWindowResize = () => {
     } catch (error) {
       console.error("Failed to resize window:", error);
     }
-  }, []);
+  }, [metrics.collapsedHeight, metrics.expandedHeight]);
 
   // Setup drag handling and popover monitoring
   useEffect(() => {

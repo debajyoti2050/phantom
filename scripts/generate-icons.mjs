@@ -7,58 +7,21 @@ import png2icons from "png2icons";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const buildDir = path.join(rootDir, "build");
-
-const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="142" y1="82" x2="870" y2="918" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0D1020"/>
-      <stop offset="0.52" stop-color="#121B2F"/>
-      <stop offset="1" stop-color="#05070F"/>
-    </linearGradient>
-    <radialGradient id="cyanGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(322 262) rotate(47) scale(620)">
-      <stop offset="0" stop-color="#5AF7FF" stop-opacity="0.88"/>
-      <stop offset="0.38" stop-color="#36B7FF" stop-opacity="0.36"/>
-      <stop offset="1" stop-color="#36B7FF" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="violetGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(734 752) rotate(-132) scale(540)">
-      <stop offset="0" stop-color="#A66BFF" stop-opacity="0.92"/>
-      <stop offset="0.42" stop-color="#743DFF" stop-opacity="0.3"/>
-      <stop offset="1" stop-color="#743DFF" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="ring" x1="224" y1="184" x2="816" y2="852" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#75F6FF"/>
-      <stop offset="0.45" stop-color="#E8F7FF"/>
-      <stop offset="1" stop-color="#8B63FF"/>
-    </linearGradient>
-    <linearGradient id="phantom" x1="344" y1="236" x2="700" y2="810" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F8FCFF"/>
-      <stop offset="0.54" stop-color="#D7F7FF"/>
-      <stop offset="1" stop-color="#B7A4FF"/>
-    </linearGradient>
-    <filter id="softShadow" x="118" y="142" width="786" height="746" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="30" stdDeviation="42" flood-color="#000000" flood-opacity="0.48"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="26" flood-color="#5AF7FF" flood-opacity="0.24"/>
-    </filter>
-  </defs>
-  <rect x="40" y="40" width="944" height="944" rx="226" fill="url(#bg)"/>
-  <rect x="40" y="40" width="944" height="944" rx="226" fill="url(#cyanGlow)"/>
-  <rect x="40" y="40" width="944" height="944" rx="226" fill="url(#violetGlow)"/>
-  <path d="M180 606C210 372 366 204 540 204C705 204 817 315 845 486" stroke="url(#ring)" stroke-width="34" stroke-linecap="round" opacity="0.72"/>
-  <path d="M196 682C272 795 397 858 527 849C639 841 744 783 812 688" stroke="#7BF4FF" stroke-width="18" stroke-linecap="round" opacity="0.24"/>
-  <g filter="url(#softShadow)">
-    <path d="M514 216C361 216 262 323 262 491V765C262 807 312 829 344 801L391 761L444 807C463 824 493 824 512 807L566 761L618 807C638 824 667 824 686 807L738 762L784 801C816 829 866 807 866 765V491C866 323 767 216 614 216H514Z" fill="url(#phantom)"/>
-    <path d="M402 471C402 431 428 403 468 403C508 403 534 431 534 471V522H402V471Z" fill="#11182A"/>
-    <path d="M583 471C583 431 609 403 649 403C689 403 715 431 715 471V522H583V471Z" fill="#11182A"/>
-    <path d="M452 641C488 668 545 682 595 671C622 665 648 653 670 636" stroke="#162033" stroke-width="34" stroke-linecap="round"/>
-  </g>
-  <path d="M268 378C327 286 415 238 532 238" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" opacity="0.5"/>
-</svg>`;
+const sourcePath = process.argv[2]
+  ? path.resolve(process.cwd(), process.argv[2])
+  : path.join(buildDir, "logo-source.png");
 
 await fs.mkdir(buildDir, { recursive: true });
-await fs.writeFile(path.join(buildDir, "icon.svg"), svg, "utf8");
+await fs.access(sourcePath);
 
-const png = await sharp(Buffer.from(svg)).resize(1024, 1024).png().toBuffer();
+const png = await sharp(sourcePath)
+  .ensureAlpha()
+  .resize(1024, 1024, {
+    fit: "cover",
+    position: "center",
+  })
+  .png()
+  .toBuffer();
 await fs.writeFile(path.join(buildDir, "icon.png"), png);
 
 const ico = png2icons.createICO(png, png2icons.BICUBIC2, 0, false, true);
@@ -69,4 +32,6 @@ const icns = png2icons.createICNS(png, png2icons.BICUBIC2, 0);
 if (!icns) throw new Error("Failed to create macOS ICNS icon");
 await fs.writeFile(path.join(buildDir, "icon.icns"), icns);
 
-console.log("Generated build/icon.svg, build/icon.png, build/icon.ico, and build/icon.icns");
+console.log(
+  `Generated build/icon.png, build/icon.ico, and build/icon.icns from ${path.relative(rootDir, sourcePath)}`
+);

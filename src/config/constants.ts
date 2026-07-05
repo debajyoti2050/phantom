@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   SYSTEM_PROMPT: "system_prompt",
   SELECTED_SYSTEM_PROMPT_ID: "selected_system_prompt_id",
   SCREENSHOT_CONFIG: "screenshot_config",
+  SCREENSHOT_PROMPT_PRESETS: "screenshot_prompt_presets",
   // add curl_ prefix because we are using curl to store the providers
   CUSTOM_AI_PROVIDERS: "curl_custom_ai_providers",
   CUSTOM_SPEECH_PROVIDERS: "curl_custom_speech_providers",

@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components";
 import { Check, X } from "lucide-react";
-import {
-  isMacOS,
-  validateShortcutKey,
-  formatShortcutKeyForDisplay,
-} from "@/lib";
+import { isMacOS, validateShortcutKey } from "@/lib";
 import { invoke } from "@tauri-apps/api/core";
+import { ShortcutKeycaps } from "./ShortcutKeycaps";
 
 interface ShortcutRecorderProps {
   onSave: (key: string) => void;
@@ -23,7 +20,7 @@ export const ShortcutRecorder = ({
 }: ShortcutRecorderProps) => {
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
   const [error, setError] = useState<string>("");
-  const isRecording = true; // Always recording
+  const isRecording = true;
   const isMoveWindow = actionId === "move_window";
   const minKeys = isMoveWindow ? 1 : 2;
 
@@ -36,17 +33,13 @@ export const ShortcutRecorder = ({
 
       const keys: string[] = [];
 
-      // Add modifiers
       if (e.metaKey || e.ctrlKey) {
         keys.push(isMacOS() ? "cmd" : "ctrl");
       }
       if (e.altKey) keys.push("alt");
       if (e.shiftKey) keys.push("shift");
 
-      // Handle special keys properly
       let mainKey = e.key.toLowerCase();
-
-      // Map special keys to Tauri format
       const specialKeyMap: Record<string, string> = {
         arrowup: "up",
         arrowdown: "down",
@@ -117,18 +110,16 @@ export const ShortcutRecorder = ({
   );
 
   useEffect(() => {
-    if (isRecording) {
-      // Focus the window to ensure key events are captured
-      window.focus();
+    if (!isRecording) return;
 
-      window.addEventListener("keydown", handleKeyDown, true);
-      window.addEventListener("keyup", handleKeyUp, true);
+    window.focus();
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
 
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown, true);
-        window.removeEventListener("keyup", handleKeyUp, true);
-      };
-    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+    };
   }, [isRecording, handleKeyDown, handleKeyUp]);
 
   const handleSave = async () => {
@@ -143,15 +134,12 @@ export const ShortcutRecorder = ({
 
     const shortcutKey = recordedKeys.join("+");
 
-    // For move_window, skip validation as we'll add arrow keys in the backend
     if (!isMoveWindow) {
-      // Validate with frontend
       if (!validateShortcutKey(shortcutKey)) {
         setError("Invalid shortcut combination");
         return;
       }
 
-      // Validate with backend
       try {
         const isValid = await invoke<boolean>("validate_shortcut_key", {
           key: shortcutKey,
@@ -161,7 +149,7 @@ export const ShortcutRecorder = ({
           setError("This shortcut combination is not supported");
           return;
         }
-      } catch (e) {
+      } catch {
         setError("Failed to validate shortcut");
         return;
       }
@@ -176,22 +164,19 @@ export const ShortcutRecorder = ({
     onCancel();
   };
 
-  const displayKey =
-    recordedKeys.length > 0
-      ? formatShortcutKeyForDisplay(recordedKeys.join("+"))
-      : "Waiting for keys...";
-
   return (
-    <div className="flex flex-col gap-2 w-full">
-      <div className="flex gap-2 items-center">
+    <div className="flex w-full flex-col gap-2">
+      <div className="flex items-center gap-2">
         <div className="flex-1">
-          <div className="px-3 py-2 bg-primary/5 border-2 border-primary/50 rounded-md font-mono text-sm text-center">
-            {isRecording ? (
-              <span className="text-primary font-medium animate-pulse">
-                ⌨️ {displayKey}
+          <div className="rounded-md border-2 border-primary/50 bg-primary/5 px-3 py-2 text-center text-sm">
+            {recordedKeys.length > 0 ? (
+              <span className="flex justify-center">
+                <ShortcutKeycaps shortcutKey={recordedKeys.join("+")} />
               </span>
             ) : (
-              <span>{displayKey}</span>
+              <span className="font-medium text-primary animate-pulse">
+                Waiting for keys...
+              </span>
             )}
           </div>
         </div>
@@ -218,21 +203,21 @@ export const ShortcutRecorder = ({
         </Button>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
-      {isRecording && !error && (
+      {isRecording && !error ? (
         <p className="text-xs text-muted-foreground">
           {isMoveWindow
-            ? "Press modifier keys (e.g., Cmd+Shift). Arrow keys work automatically."
-            : "Press a key combination now (e.g., Cmd+Shift+K)"}
+            ? "Press modifier keys (for example, Ctrl+Shift). Arrow keys work automatically."
+            : "Press a key combination now (for example, Ctrl+Shift+K)."}
         </p>
-      )}
+      ) : null}
 
-      {recordedKeys.length >= minKeys && !error && (
+      {recordedKeys.length >= minKeys && !error ? (
         <p className="text-xs text-green-600">
-          ✓ Shortcut captured! Click "Save" to apply.
+          Shortcut captured. Click "Save" to apply.
         </p>
-      )}
+      ) : null}
     </div>
   );
 };

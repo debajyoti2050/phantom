@@ -50,8 +50,13 @@ export interface UseCompletionReturn {
   clearFiles: () => void;
 
   // Completion actions
-  /** Function to submit the completion request, optionally with speech text */
-  submit: (speechText?: string) => Promise<void>;
+  /** Function to submit the completion request, optionally with transient capture context */
+  submit: (
+    speechText?: string,
+    transientFiles?: any[],
+    transientOcrContexts?: any[],
+    transientNotice?: string | null
+  ) => Promise<void>;
   /** Function to cancel the current completion request */
   cancel: () => void;
   /** Function to reset the completion state (clears input, response, error, files) */

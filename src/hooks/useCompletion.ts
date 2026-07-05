@@ -14,6 +14,10 @@ import {
   generateMessageId,
   generateRequestId,
   getResponseSettings,
+  buildOcrUserMessage,
+  prepareAccessibilityTextPayload,
+  prepareScreenshotPayload,
+  ScreenshotTextContext,
 } from "@/lib";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -50,6 +54,7 @@ interface CompletionState {
   error: string | null;
   notice: string | null;
   attachedFiles: AttachedFile[];
+  ocrContexts: ScreenshotTextContext[];
   currentConversationId: string | null;
   conversationHistory: ChatMessage[];
 }
@@ -71,6 +76,7 @@ export const useCompletion = () => {
     error: null,
     notice: null,
     attachedFiles: [],
+    ocrContexts: [],
     currentConversationId: null,
     conversationHistory: [],
   });
@@ -146,12 +152,24 @@ export const useCompletion = () => {
   }, []);
 
   const clearFiles = useCallback(() => {
-    setState((prev) => ({ ...prev, attachedFiles: [] }));
+    setState((prev) => ({ ...prev, attachedFiles: [], ocrContexts: [] }));
   }, []);
 
   const submit = useCallback(
-    async (speechText?: string) => {
+    async (
+      speechText?: string,
+      transientFiles: AttachedFile[] = [],
+      transientOcrContexts: ScreenshotTextContext[] = [],
+      transientNotice: string | null = null
+    ) => {
       const input = speechText || state.input;
+      const activeFiles = transientFiles.length
+        ? transientFiles
+        : state.attachedFiles;
+      const activeOcrContexts = transientOcrContexts.length
+        ? transientOcrContexts
+        : state.ocrContexts;
+      const inputWithOcr = buildOcrUserMessage(input, activeOcrContexts);
 
       if (!input.trim()) {
         return;
@@ -185,8 +203,8 @@ export const useCompletion = () => {
 
         // Handle image attachments
         const imagesBase64: string[] = [];
-        if (state.attachedFiles.length > 0) {
-          state.attachedFiles.forEach((file) => {
+        if (activeFiles.length > 0) {
+          activeFiles.forEach((file) => {
             if (file.type.startsWith("image/")) {
               imagesBase64.push(file.base64);
             }
@@ -226,7 +244,7 @@ export const useCompletion = () => {
           ...prev,
           isLoading: true,
           error: null,
-          notice: null,
+          notice: transientNotice,
           response: "",
         }));
 
@@ -237,7 +255,7 @@ export const useCompletion = () => {
             selectedProvider: selectedAIProvider,
             systemPrompt: systemPrompt || undefined,
             history: messageHistory,
-            userMessage: input,
+            userMessage: inputWithOcr,
             imagesBase64,
             signal,
           })) {
@@ -285,15 +303,16 @@ export const useCompletion = () => {
         // Save the conversation after successful completion
         if (fullResponse) {
           await saveCurrentConversation(
-            input,
+            inputWithOcr,
             fullResponse,
-            state.attachedFiles
+            activeFiles
           );
           // Clear input and attached files after saving
           setState((prev) => ({
             ...prev,
             input: "",
             attachedFiles: [],
+            ocrContexts: [],
           }));
         }
       } catch (error) {
@@ -311,6 +330,7 @@ export const useCompletion = () => {
     [
       state.input,
       state.attachedFiles,
+      state.ocrContexts,
       selectedAIProvider,
       allAiProviders,
       systemPrompt,
@@ -340,6 +360,7 @@ export const useCompletion = () => {
       error: null,
       notice: null,
       attachedFiles: [],
+      ocrContexts: [],
     }));
   }, [cancel, keepEngaged]);
 
@@ -383,6 +404,7 @@ export const useCompletion = () => {
       notice: null,
       isLoading: false,
       attachedFiles: [],
+      ocrContexts: [],
     }));
   }, []);
 
@@ -575,7 +597,11 @@ export const useCompletion = () => {
 
   const handleScreenshotSubmit = useCallback(
     async (base64: string, prompt?: string) => {
-      if (state.attachedFiles.length >= MAX_FILES) {
+      const config = screenshotConfigRef.current;
+      if (
+        state.attachedFiles.length >= MAX_FILES &&
+        config.payloadMode !== "ocr_text"
+      ) {
         setState((prev) => ({
           ...prev,
           error: `You can only upload ${MAX_FILES} files`,
@@ -585,15 +611,25 @@ export const useCompletion = () => {
       }
 
       try {
+        const payload = await prepareScreenshotPayload(base64, config);
+
         if (prompt) {
-          // Auto mode: Submit directly to AI with screenshot
-          const attachedFile: AttachedFile = {
-            id: Date.now().toString(),
-            name: `screenshot_${Date.now()}.png`,
-            type: "image/png",
-            base64: base64,
-            size: base64.length,
-          };
+          const attachedFile: AttachedFile | null =
+            payload.kind === "image"
+              ? {
+                  id: Date.now().toString(),
+                  name: `screenshot_${Date.now()}.png`,
+                  type: "image/png",
+                  base64: payload.imageBase64,
+                  size: payload.imageBase64.length,
+                }
+              : null;
+          const userMessage =
+            payload.kind === "ocr_text"
+              ? buildOcrUserMessage(prompt, [payload.context])
+              : prompt;
+          const imagesBase64 =
+            payload.kind === "image" ? [payload.imageBase64] : [];
 
           // Generate unique request ID
           const requestId = generateRequestId();
@@ -613,8 +649,9 @@ export const useCompletion = () => {
               input: prompt,
               isLoading: true,
               error: null,
-              notice: null,
+              notice: payload.notice || null,
               response: "",
+              ocrContexts: [],
             }));
 
             // Prepare message history for the AI
@@ -657,8 +694,8 @@ export const useCompletion = () => {
               selectedProvider: selectedAIProvider,
               systemPrompt: systemPrompt || undefined,
               history: messageHistory,
-              userMessage: prompt,
-              imagesBase64: [base64],
+              userMessage,
+              imagesBase64,
               signal,
             })) {
               // Only update if this is still the current request
@@ -687,9 +724,11 @@ export const useCompletion = () => {
 
             // Save the conversation after successful completion
             if (fullResponse) {
-              await saveCurrentConversation(prompt, fullResponse, [
-                attachedFile,
-              ]);
+              await saveCurrentConversation(
+                userMessage,
+                fullResponse,
+                attachedFile ? [attachedFile] : []
+              );
               // Clear input after saving
               setState((prev) => ({
                 ...prev,
@@ -712,13 +751,32 @@ export const useCompletion = () => {
             }
           }
         } else {
-          // Manual mode: Add to attached files
+          if (payload.kind === "ocr_text") {
+            setState((prev) => ({
+              ...prev,
+              ocrContexts: [...prev.ocrContexts, payload.context],
+              response: "",
+              error: null,
+              notice: `${payload.notice} Add a prompt and press Enter to send the extracted text.`,
+            }));
+            return;
+          }
+
+          if (state.attachedFiles.length >= MAX_FILES) {
+            setState((prev) => ({
+              ...prev,
+              error: `You can only upload ${MAX_FILES} files`,
+              notice: null,
+            }));
+            return;
+          }
+
           const attachedFile: AttachedFile = {
             id: Date.now().toString(),
             name: `screenshot_${Date.now()}.png`,
             type: "image/png",
-            base64: base64,
-            size: base64.length,
+            base64: payload.imageBase64,
+            size: payload.imageBase64.length,
           };
 
           setState((prev) => ({
@@ -726,7 +784,7 @@ export const useCompletion = () => {
             attachedFiles: [...prev.attachedFiles, attachedFile],
             response: "",
             error: null,
-            notice: `Screenshot attached (${prev.attachedFiles.length + 1}/${MAX_FILES}). Add a prompt and press Enter to send it, or switch screenshots to Auto Submit.`,
+            notice: `${payload.notice ? `${payload.notice} ` : ""}Screenshot attached (${prev.attachedFiles.length + 1}/${MAX_FILES}). Add a prompt and press Enter to send it, or switch screenshots to Auto Submit.`,
           }));
         }
       } catch (error) {
@@ -823,6 +881,37 @@ export const useCompletion = () => {
     [state.input]
   );
 
+  const handleUltraInstinctCapture = useCallback(
+    async (prompt?: string) => {
+      const payload = await prepareAccessibilityTextPayload();
+
+      if (payload.kind === "no_accessibility_text") {
+        setState((prev) => ({
+          ...prev,
+          response: "",
+          error: null,
+          notice: payload.notice,
+          isLoading: false,
+        }));
+        return;
+      }
+
+      if (prompt) {
+        await submit(prompt, [], [payload.context], payload.notice);
+        return;
+      }
+
+      setState((prev) => ({
+        ...prev,
+        ocrContexts: [...prev.ocrContexts, payload.context],
+        response: "",
+        error: null,
+        notice: `${payload.notice} Add a prompt and press Enter to send the extracted text.`,
+      }));
+    },
+    [submit]
+  );
+
   useEffect(() => {
     resizeWindow(micOpen || messageHistoryOpen || isFilesPopoverOpen);
   }, [micOpen, messageHistoryOpen, resizeWindow, isFilesPopoverOpen]);
@@ -896,6 +985,7 @@ export const useCompletion = () => {
             notice: null,
             isLoading: false,
             attachedFiles: [],
+            ocrContexts: [],
           }));
         }
       }
@@ -994,12 +1084,24 @@ export const useCompletion = () => {
       ...prev,
       response: "",
       error: null,
-      notice: config.enabled
+      notice: config.ultraInstinctEnabled
+        ? "Phantom Ultra Instinct Mode is reading active-window text..."
+        : config.enabled
         ? "Capturing screenshot..."
         : "Select an area to capture. The response panel will update after capture.",
     }));
 
     try {
+      if (config.ultraInstinctEnabled) {
+        await handleUltraInstinctCapture(
+          config.mode === "auto"
+            ? resolveScreenshotPrompt(config.autoPrompt)
+            : undefined
+        );
+        screenshotInitiatedByThisContext.current = false;
+        return;
+      }
+
       // Check screen recording permission on macOS
       const platform = navigator.platform.toLowerCase();
       if (platform.includes("mac") && !hasCheckedPermissionRef.current) {
@@ -1060,11 +1162,11 @@ export const useCompletion = () => {
       isProcessingScreenshotRef.current = false;
       screenshotInitiatedByThisContext.current = false;
     } finally {
-      if (config.enabled) {
+      if (config.enabled || config.ultraInstinctEnabled) {
         setIsScreenshotLoading(false);
       }
     }
-  }, [handleScreenshotSubmit, resolveScreenshotPrompt]);
+  }, [handleScreenshotSubmit, handleUltraInstinctCapture, resolveScreenshotPrompt]);
 
   useEffect(() => {
     let unlisten: any;

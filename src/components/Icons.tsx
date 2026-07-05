@@ -1,42 +1,19 @@
-import type { SVGProps } from "react";
+import { cn } from "@/lib/utils";
+import type { ImgHTMLAttributes, SVGProps } from "react";
+import phantomLogoUrl from "../../build/icon.png?url";
 
-export const PhantomLogo = (props: SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 64 64" fill="none" aria-hidden="true" {...props}>
-    <path
-      d="M32 5 53 17v23L32 59 11 40V17L32 5Z"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinejoin="round"
-      opacity="0.92"
-    />
-    <path
-      d="M22 23c0-5.5 4.3-9.5 10-9.5s10 4 10 9.5v21l-4.8-3.2L32 45l-5.2-4.2L22 44V23Z"
-      fill="currentColor"
-      opacity="0.18"
-    />
-    <path
-      d="M22 23c0-5.5 4.3-9.5 10-9.5s10 4 10 9.5v21l-4.8-3.2L32 45l-5.2-4.2L22 44V23Z"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M18 33c8.6-5.7 19.4-5.7 28 0"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      opacity="0.7"
-    />
-    <circle cx="27" cy="28" r="2" fill="currentColor" />
-    <circle cx="37" cy="28" r="2" fill="currentColor" />
-    <path
-      d="M8 31c10.8-14.5 37.2-14.5 48 0"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      opacity="0.35"
-    />
-  </svg>
+export const PhantomLogo = ({
+  className,
+  alt = "Phantom",
+  ...props
+}: ImgHTMLAttributes<HTMLImageElement>) => (
+  <img
+    src={phantomLogoUrl}
+    alt={alt}
+    className={cn("select-none object-cover", className)}
+    draggable={false}
+    {...props}
+  />
 );
 
 export const XIcon = (props: SVGProps<SVGSVGElement>) => (

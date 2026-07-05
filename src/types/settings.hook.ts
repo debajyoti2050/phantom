@@ -1,5 +1,9 @@
 import { TYPE_PROVIDER } from "./provider.type";
-import { ScreenshotConfig, ScreenshotMode } from "./settings";
+import {
+  ScreenshotConfig,
+  ScreenshotMode,
+  ScreenshotPayloadMode,
+} from "./settings";
 
 export interface UseSettingsReturn {
   screenshotConfiguration: ScreenshotConfig;
@@ -7,6 +11,8 @@ export interface UseSettingsReturn {
     React.SetStateAction<ScreenshotConfig>
   >;
   handleScreenshotModeChange: (value: ScreenshotMode) => void;
+  handleScreenshotPayloadModeChange: (value: ScreenshotPayloadMode) => void;
+  handleUltraInstinctEnabledChange: (enabled: boolean) => void;
   handleScreenshotPromptChange: (value: string) => void;
   handleScreenshotEnabledChange: (enabled: boolean) => void;
   allAiProviders: TYPE_PROVIDER[];

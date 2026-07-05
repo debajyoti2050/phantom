@@ -7,6 +7,8 @@ import {
 } from "@/types";
 import { getPlatform } from "@/lib";
 
+const OLD_SCREENSHOT_DEFAULT_KEYS = new Set(["cmd+shift+s", "ctrl+shift+s"]);
+
 /**
  * Get platform-specific default key for a shortcut action
  */
@@ -53,10 +55,30 @@ export const getShortcutsConfig = (): ShortcutsConfig => {
       const parsed = JSON.parse(stored);
       // Merge with defaults to ensure all default actions are present
       const defaults = getDefaultShortcutsConfig();
-      return {
-        bindings: { ...defaults.bindings, ...parsed.bindings },
+      const bindings = { ...defaults.bindings, ...parsed.bindings };
+      let shouldPersistMigration = false;
+
+      if (
+        bindings.screenshot?.key &&
+        OLD_SCREENSHOT_DEFAULT_KEYS.has(bindings.screenshot.key.toLowerCase())
+      ) {
+        bindings.screenshot = {
+          ...bindings.screenshot,
+          key: defaults.bindings.screenshot.key,
+        };
+        shouldPersistMigration = true;
+      }
+
+      const config = {
+        bindings,
         customActions: parsed.customActions || [],
       };
+
+      if (shouldPersistMigration) {
+        localStorage.setItem(STORAGE_KEYS.SHORTCUTS, JSON.stringify(config));
+      }
+
+      return config;
     }
     return getDefaultShortcutsConfig();
   } catch (error) {

@@ -38,12 +38,15 @@ export interface CustomProvider {
 }
 
 export type ScreenshotMode = "auto" | "manual";
+export type ScreenshotPayloadMode = "image" | "ocr_text";
 
 // Screenshot configuration types
 export interface ScreenshotConfig {
   mode: ScreenshotMode;
   autoPrompt: string;
   enabled: boolean;
+  payloadMode: ScreenshotPayloadMode;
+  ultraInstinctEnabled: boolean;
 }
 
 // Speech-to-Text provider types

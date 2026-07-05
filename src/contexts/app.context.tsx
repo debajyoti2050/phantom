@@ -69,6 +69,8 @@ const validateAndProcessCurlProviders = (
 const AppContext = createContext<IContextType | undefined>(undefined);
 const SCREENSHOT_AUTO_DEFAULT_MIGRATION_KEY =
   "phantom_screenshot_auto_default_migrated";
+const ALWAYS_ON_TOP_DEFAULT_MIGRATION_KEY =
+  "phantom_always_on_top_default_enabled_migrated";
 
 // Create the provider component
 export const AppProvider = ({ children }: { children: ReactNode }) => {
@@ -127,6 +129,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       mode: "auto",
       autoPrompt: "Analyze this screenshot and provide insights",
       enabled: true,
+      payloadMode: "ocr_text",
+      ultraInstinctEnabled: false,
     });
 
   // Unified Customizable State
@@ -205,6 +209,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               parsed.autoPrompt ||
               "Analyze this screenshot and provide insights",
             enabled,
+            payloadMode:
+              parsed.payloadMode === "image" || parsed.payloadMode === "ocr_text"
+                ? parsed.payloadMode
+                : "ocr_text",
+            ultraInstinctEnabled: parsed.ultraInstinctEnabled === true,
           };
 
           if (!hasMigratedScreenshotDefault) {
@@ -222,6 +231,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             mode: migratedConfig.mode,
             autoPrompt: migratedConfig.autoPrompt,
             enabled: migratedConfig.enabled,
+            payloadMode: migratedConfig.payloadMode,
+            ultraInstinctEnabled: migratedConfig.ultraInstinctEnabled,
           });
         }
       } catch {
@@ -264,7 +275,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
 
     // Load customizable state
-    const customizableState = getCustomizableState();
+    let customizableState = getCustomizableState();
+    const hasMigratedAlwaysOnTopDefault =
+      safeLocalStorage.getItem(ALWAYS_ON_TOP_DEFAULT_MIGRATION_KEY) === "true";
+    if (!hasMigratedAlwaysOnTopDefault) {
+      customizableState = {
+        ...customizableState,
+        alwaysOnTop: { isEnabled: true },
+      };
+      setCustomizableState(customizableState);
+      safeLocalStorage.setItem(ALWAYS_ON_TOP_DEFAULT_MIGRATION_KEY, "true");
+    }
+
     setCustomizable(customizableState);
 
     updateCursor(customizableState.cursor.type || "invisible");

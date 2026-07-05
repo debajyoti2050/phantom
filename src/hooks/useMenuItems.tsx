@@ -10,6 +10,7 @@ import {
   PowerIcon,
   GithubIcon,
   MessageSquareTextIcon,
+  MonitorIcon,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -49,6 +50,11 @@ export const useMenuItems = () => {
       icon: ScanSearchIcon,
       label: "Capture",
       href: "/screenshot",
+    },
+    {
+      icon: MonitorIcon,
+      label: "Display",
+      href: "/display",
     },
     {
       icon: AudioLinesIcon,

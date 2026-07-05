@@ -6,6 +6,7 @@ import {
   deleteAllConversations,
 } from "@/lib";
 import { STORAGE_KEYS } from "@/config";
+import { ScreenshotPayloadMode } from "@/types";
 
 export const useSettings = () => {
   const {
@@ -33,6 +34,27 @@ export const useSettings = () => {
 
   const handleScreenshotModeChange = (value: "auto" | "manual") => {
     const newConfig = { ...screenshotConfiguration, mode: value };
+    setScreenshotConfiguration(newConfig);
+    safeLocalStorage.setItem(
+      STORAGE_KEYS.SCREENSHOT_CONFIG,
+      JSON.stringify(newConfig)
+    );
+  };
+
+  const handleScreenshotPayloadModeChange = (value: ScreenshotPayloadMode) => {
+    const newConfig = { ...screenshotConfiguration, payloadMode: value };
+    setScreenshotConfiguration(newConfig);
+    safeLocalStorage.setItem(
+      STORAGE_KEYS.SCREENSHOT_CONFIG,
+      JSON.stringify(newConfig)
+    );
+  };
+
+  const handleUltraInstinctEnabledChange = (enabled: boolean) => {
+    const newConfig = {
+      ...screenshotConfiguration,
+      ultraInstinctEnabled: enabled,
+    };
     setScreenshotConfiguration(newConfig);
     safeLocalStorage.setItem(
       STORAGE_KEYS.SCREENSHOT_CONFIG,
@@ -98,6 +120,8 @@ export const useSettings = () => {
     screenshotConfiguration,
     setScreenshotConfiguration,
     handleScreenshotModeChange,
+    handleScreenshotPayloadModeChange,
+    handleUltraInstinctEnabledChange,
     handleScreenshotPromptChange,
     handleScreenshotEnabledChange,
     allAiProviders,

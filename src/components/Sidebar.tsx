@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMenuItems, useVersion } from "@/hooks";
-import phantomLogoUrl from "../../build/icon.svg?url";
+import phantomLogoUrl from "../../build/icon.png?url";
 
 export const Sidebar = () => {
   const { version, isLoading } = useVersion();

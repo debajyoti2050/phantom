@@ -1,18 +1,23 @@
 import { FormEvent, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   AlertTriangleIcon,
   BrainCircuitIcon,
   CheckCircle2Icon,
   CopyIcon,
+  FileTextIcon,
   GripIcon,
+  ImageIcon,
   Loader2,
   PinIcon,
   SendHorizontalIcon,
+  SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { Button, Input, Markdown, ScrollArea, Switch } from "@/components";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { useOverlayScale } from "@/hooks";
 
 type ResponseMessage = {
   id: string;
@@ -41,9 +46,116 @@ const emptyState: ResponseWindowState = {
   conversationHistory: [],
 };
 
+function getCaptureStatus(notice: string | null) {
+  if (!notice) return null;
+
+  const normalized = notice.toLowerCase();
+
+  if (normalized.includes("ultra instinct mode captured")) {
+    return {
+      label: normalized.includes("truncated")
+        ? "Window text sent - trimmed"
+        : "Window text sent",
+      className: "is-ultra",
+      Icon: SparklesIcon,
+      isAnimated: false,
+    };
+  }
+
+  if (
+    normalized.includes("no window text") ||
+    normalized.includes("could not read active-window text")
+  ) {
+    return {
+      label: "No window text",
+      className: "is-fallback",
+      Icon: FileTextIcon,
+      isAnimated: false,
+    };
+  }
+
+  if (normalized.includes("only available on windows")) {
+    return {
+      label: "Windows only",
+      className: "is-fallback",
+      Icon: SparklesIcon,
+      isAnimated: false,
+    };
+  }
+
+  if (normalized.includes("ultra instinct mode is reading")) {
+    return {
+      label: "Reading window",
+      className: "is-working",
+      Icon: Loader2,
+      isAnimated: true,
+    };
+  }
+
+  if (normalized.includes("ocr text captured locally")) {
+    return {
+      label: normalized.includes("truncated")
+        ? "OCR text sent · trimmed"
+        : "OCR text sent · no image",
+      className: "is-ocr",
+      Icon: FileTextIcon,
+      isAnimated: false,
+    };
+  }
+
+  if (
+    normalized.includes("no readable ocr") ||
+    normalized.includes("ocr failed") ||
+    normalized.includes("sent the screenshot image instead")
+  ) {
+    return {
+      label: "Image fallback",
+      className: "is-fallback",
+      Icon: ImageIcon,
+      isAnimated: false,
+    };
+  }
+
+  if (normalized.includes("capturing screenshot")) {
+    return {
+      label: "Capturing",
+      className: "is-working",
+      Icon: Loader2,
+      isAnimated: true,
+    };
+  }
+
+  if (normalized.includes("select an area")) {
+    return {
+      label: "Select area",
+      className: "is-working",
+      Icon: ImageIcon,
+      isAnimated: false,
+    };
+  }
+
+  if (normalized.includes("screenshot attached")) {
+    return {
+      label: "Image attached",
+      className: "is-image",
+      Icon: ImageIcon,
+      isAnimated: false,
+    };
+  }
+
+  return {
+    label: "Capture ready",
+    className: "is-ready",
+    Icon: CheckCircle2Icon,
+    isAnimated: false,
+  };
+}
+
 export function ResponseOverlayWindow() {
   const [state, setState] = useState<ResponseWindowState>(emptyState);
   const [followUp, setFollowUp] = useState("");
+  const { metrics: overlayMetrics } = useOverlayScale();
+  const captureStatus = getCaptureStatus(state.notice);
   const stateLabel = state.error
     ? "Error"
     : state.isLoading
@@ -102,7 +214,14 @@ export function ResponseOverlayWindow() {
   };
 
   return (
-    <div className="phantom-response-native-root">
+    <div
+      className="phantom-response-native-root"
+      style={
+        {
+          "--phantom-overlay-scale": overlayMetrics.scale,
+        } as CSSProperties
+      }
+    >
       <div className="phantom-response-window is-native">
         <div className="phantom-response-header" data-tauri-drag-region={true}>
           <div className="flex min-w-0 flex-row items-center gap-2">
@@ -113,9 +232,23 @@ export function ResponseOverlayWindow() {
               <BrainCircuitIcon className="size-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold select-none">
-                {state.keepEngaged ? "Conversation" : "AI Response"}
-              </h3>
+              <div className="phantom-response-title-row">
+                <h3 className="truncate text-sm font-semibold select-none">
+                  {state.keepEngaged ? "Conversation" : "AI Response"}
+                </h3>
+                {captureStatus ? (
+                  <span
+                    className={`phantom-capture-chip ${captureStatus.className}`}
+                    title={state.notice || undefined}
+                    aria-label={state.notice || captureStatus.label}
+                  >
+                    <captureStatus.Icon
+                      className={captureStatus.isAnimated ? "animate-spin" : ""}
+                    />
+                    <span>{captureStatus.label}</span>
+                  </span>
+                ) : null}
+              </div>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <span
                   className={`phantom-state-chip ${
@@ -183,15 +316,6 @@ export function ResponseOverlayWindow() {
                 <div>
                   <strong>Error</strong>
                   <p>{state.error}</p>
-                </div>
-              </div>
-            )}
-            {!state.error && state.notice && (
-              <div className="phantom-message is-notice">
-                <CheckCircle2Icon className="mt-0.5 size-4 shrink-0" />
-                <div>
-                  <strong>Capture Ready</strong>
-                  <p>{state.notice}</p>
                 </div>
               </div>
             )}

@@ -7,6 +7,12 @@ import {
   Switch,
   TextInput,
 } from "@/components";
+import {
+  deleteProviderApiKeyProfile,
+  getProviderApiKeyProfiles,
+  ProviderApiKeyProfile,
+  saveProviderApiKeyProfile,
+} from "@/lib/storage/provider-api-keys";
 import { cn } from "@/lib/utils";
 import { UseSettingsReturn } from "@/types";
 import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg?url";
@@ -27,12 +33,14 @@ import {
   EyeIcon,
   EyeOffIcon,
   KeyRoundIcon,
+  PlusIcon,
   RadioIcon,
+  SaveIcon,
   SlidersHorizontalIcon,
   SparklesIcon,
   TrashIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ProviderVisual = {
   label: string;
@@ -136,6 +144,12 @@ export const Providers = ({
   const [localSelectedProvider, setLocalSelectedProvider] =
     useState<ResultJSON | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyProfiles, setApiKeyProfiles] = useState<
+    ProviderApiKeyProfile[]
+  >([]);
+  const [selectedApiKeyId, setSelectedApiKeyId] = useState("");
+  const [apiKeyProfileName, setApiKeyProfileName] = useState("");
+  const [apiKeyStatus, setApiKeyStatus] = useState("");
 
   const selectedProvider = allAiProviders?.find(
     (p) => p?.id === selectedAIProvider?.provider
@@ -183,6 +197,51 @@ export const Providers = ({
     }
   }, [allAiProviders, selectedAIProvider?.provider]);
 
+  const getNextApiKeyProfileName = useCallback(
+    (profiles = apiKeyProfiles) =>
+      `${selectedProviderVisual.label} key ${profiles.length + 1}`,
+    [apiKeyProfiles, selectedProviderVisual.label]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadApiKeyProfiles() {
+      if (!apiKeyVar || !selectedAIProvider?.provider) {
+        setApiKeyProfiles([]);
+        setSelectedApiKeyId("");
+        setApiKeyProfileName("");
+        return;
+      }
+
+      const profiles = await getProviderApiKeyProfiles(
+        "ai",
+        selectedAIProvider.provider
+      );
+      if (!isMounted) return;
+
+      const matchingProfile = profiles.find(
+        (profile) => profile.value === apiKeyValue
+      );
+      setApiKeyProfiles(profiles);
+      setSelectedApiKeyId(matchingProfile?.id || "");
+      setApiKeyProfileName(
+        matchingProfile?.name || getNextApiKeyProfileName(profiles)
+      );
+    }
+
+    void loadApiKeyProfiles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    apiKeyVar?.key,
+    apiKeyValue,
+    getNextApiKeyProfileName,
+    selectedAIProvider?.provider,
+  ]);
+
   const setSelectedProvider = (provider: string) => {
     onSetSelectedAIProvider({
       provider,
@@ -201,6 +260,112 @@ export const Providers = ({
         [key]: value,
       },
     });
+  };
+
+  const persistApiKeyProfile = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!apiKeyVar || !selectedAIProvider?.provider || !apiKeyValue.trim()) {
+        return;
+      }
+
+      const profile = await saveProviderApiKeyProfile(
+        "ai",
+        selectedAIProvider.provider,
+        {
+          id: selectedApiKeyId || undefined,
+          name: apiKeyProfileName || getNextApiKeyProfileName(),
+          value: apiKeyValue.trim(),
+        }
+      );
+
+      setApiKeyProfiles((profiles) =>
+        profiles
+          .filter((item) => item.id !== profile.id)
+          .concat(profile)
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setSelectedApiKeyId(profile.id);
+      setApiKeyProfileName(profile.name);
+      setApiKeyStatus(silent ? "Auto-saved" : "Saved");
+      window.setTimeout(() => setApiKeyStatus(""), 1800);
+    },
+    [
+      apiKeyProfileName,
+      apiKeyValue,
+      apiKeyVar?.key,
+      getNextApiKeyProfileName,
+      selectedAIProvider?.provider,
+      selectedApiKeyId,
+    ]
+  );
+
+  useEffect(() => {
+    if (!apiKeyVar || !selectedAIProvider?.provider || !apiKeyValue.trim()) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void persistApiKeyProfile({ silent: true });
+    }, 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    apiKeyValue,
+    apiKeyProfileName,
+    apiKeyVar?.key,
+    persistApiKeyProfile,
+    selectedAIProvider?.provider,
+  ]);
+
+  const handleApiKeyProfileSelect = (profileId: string) => {
+    const profile = apiKeyProfiles.find((item) => item.id === profileId);
+    if (!profile || !apiKeyVar) return;
+
+    setSelectedApiKeyId(profile.id);
+    setApiKeyProfileName(profile.name);
+    setVariableValue(apiKeyVar.key, profile.value);
+    setApiKeyStatus("Selected");
+    window.setTimeout(() => setApiKeyStatus(""), 1600);
+  };
+
+  const handleCreateNewApiKeyProfile = () => {
+    setSelectedApiKeyId("");
+    setApiKeyProfileName(getNextApiKeyProfileName());
+    if (apiKeyVar) {
+      setVariableValue(apiKeyVar.key, "");
+    }
+    setShowApiKey(false);
+    setApiKeyStatus("New key");
+    window.setTimeout(() => setApiKeyStatus(""), 1600);
+  };
+
+  const handleDeleteSelectedApiKey = async () => {
+    if (!apiKeyVar || !selectedAIProvider?.provider) return;
+
+    if (!selectedApiKeyId) {
+      setVariableValue(apiKeyVar.key, "");
+      setApiKeyProfileName(getNextApiKeyProfileName());
+      return;
+    }
+
+    const deletedProfile = apiKeyProfiles.find(
+      (profile) => profile.id === selectedApiKeyId
+    );
+    const nextProfiles = await deleteProviderApiKeyProfile(
+      "ai",
+      selectedAIProvider.provider,
+      selectedApiKeyId
+    );
+    setApiKeyProfiles(nextProfiles);
+    setSelectedApiKeyId("");
+    setApiKeyProfileName(getNextApiKeyProfileName(nextProfiles));
+
+    if (deletedProfile?.value === apiKeyValue) {
+      setVariableValue(apiKeyVar.key, "");
+    }
+
+    setApiKeyStatus("Deleted");
+    window.setTimeout(() => setApiKeyStatus(""), 1600);
   };
 
   return (
@@ -346,6 +511,42 @@ export const Providers = ({
                 <Label className="text-sm font-medium text-foreground">
                   API Key
                 </Label>
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+                  <div className="space-y-1">
+                    <Selection
+                      selected={selectedApiKeyId}
+                      options={apiKeyProfiles.map((profile) => ({
+                        label: profile.name,
+                        value: profile.id,
+                      }))}
+                      placeholder={
+                        apiKeyProfiles.length
+                          ? "Select a saved key"
+                          : "No saved keys yet"
+                      }
+                      onChange={handleApiKeyProfileSelect}
+                      disabled={!apiKeyProfiles.length}
+                    />
+                  </div>
+                  <Input
+                    value={apiKeyProfileName}
+                    onChange={(event) =>
+                      setApiKeyProfileName(event.target.value)
+                    }
+                    placeholder="API key 1"
+                    className="h-11 rounded-xl border-cyan-200/15 bg-black/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] focus-visible:border-cyan-300/50 focus-visible:ring-cyan-300/20"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleCreateNewApiKeyProfile}
+                    size="icon"
+                    variant="outline"
+                    className="size-11"
+                    title="Create a new saved API key"
+                  >
+                    <PlusIcon className="size-4" />
+                  </Button>
+                </div>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -372,14 +573,29 @@ export const Providers = ({
                   </div>
                   <Button
                     type="button"
-                    onClick={() => setVariableValue(apiKeyVar.key, "")}
+                    onClick={() => void persistApiKeyProfile()}
                     size="icon"
-                    variant={apiKeyValue ? "destructive" : "outline"}
-                    disabled={!apiKeyValue}
+                    variant="outline"
+                    disabled={!apiKeyValue.trim()}
                     className="size-11"
-                    title="Remove API key"
+                    title="Save API key profile"
                   >
-                    {apiKeyValue ? (
+                    <SaveIcon className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleDeleteSelectedApiKey()}
+                    size="icon"
+                    variant={apiKeyValue || selectedApiKeyId ? "destructive" : "outline"}
+                    disabled={!apiKeyValue && !selectedApiKeyId}
+                    className="size-11"
+                    title={
+                      selectedApiKeyId
+                        ? "Delete saved API key"
+                        : "Clear current API key"
+                    }
+                  >
+                    {apiKeyValue || selectedApiKeyId ? (
                       <TrashIcon className="size-4" />
                     ) : (
                       <KeyRoundIcon className="size-4" />
@@ -387,7 +603,12 @@ export const Providers = ({
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Your API key is stored locally and never shared.
+                  Saved keys are stored locally in Phantom's secure vault when
+                  available. {apiKeyProfiles.length} saved for{" "}
+                  {selectedProviderVisual.label}
+                  {apiKeyStatus ? (
+                    <span className="ml-2 text-cyan-200">{apiKeyStatus}</span>
+                  ) : null}
                 </p>
               </div>
             ) : null}

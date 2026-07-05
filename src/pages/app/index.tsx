@@ -10,16 +10,18 @@ import {
   AudioVisualizer,
   StatusIndicator,
 } from "./components";
-import { useApp } from "@/hooks";
+import { useApp, useOverlayScale } from "@/hooks";
 import { useApp as useAppContext } from "@/contexts";
 import { PanelsTopLeftIcon } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ErrorBoundary } from "react-error-boundary";
 import { ErrorLayout } from "@/layouts";
 import { getPlatform } from "@/lib";
+import type { CSSProperties } from "react";
 
 const App = () => {
   const { isHidden, systemAudio } = useApp();
+  const { metrics: overlayMetrics } = useOverlayScale();
   const { customizable } = useAppContext();
   const platform = getPlatform();
   const isSystemAudioThinking = Boolean(
@@ -48,6 +50,11 @@ const App = () => {
         className={`phantom-overlay-root ${
           isHidden ? "hidden pointer-events-none" : ""
         }`}
+        style={
+          {
+            "--phantom-overlay-scale": overlayMetrics.scale,
+          } as CSSProperties
+        }
       >
         <div
           className={`phantom-overlay-shell ${

@@ -7,12 +7,12 @@ import {
   updateShortcutBinding,
   resetShortcutsToDefaults,
   checkShortcutConflicts,
-  formatShortcutKeyForDisplay,
   getPlatformDefaultKey,
 } from "@/lib";
 import { ShortcutAction, ShortcutBinding } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
 import { ShortcutRecorder } from "./ShortcutRecorder";
+import { ShortcutKeycaps } from "./ShortcutKeycaps";
 
 export const ShortcutManager = () => {
   const hasActiveLicense = true;
@@ -237,13 +237,16 @@ export const ShortcutManager = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <code className="px-3 py-1.5 bg-muted rounded text-xs lg:text-sm font-mono">
-                      {action.id === "move_window"
-                        ? `${formatShortcutKeyForDisplay(
-                            binding.key
-                          )} + (â† â†‘ â†“ â†’)`
-                        : formatShortcutKeyForDisplay(binding.key)}
-                    </code>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.035] px-2.5 py-2">
+                      <ShortcutKeycaps
+                        shortcutKey={binding.key}
+                        trailingKeys={
+                          action.id === "move_window"
+                            ? ["left", "up", "down", "right"]
+                            : []
+                        }
+                      />
+                    </div>
                     <Button
                       size="sm"
                       variant={isLocked ? "outline" : "default"}

@@ -1,9 +1,9 @@
 <div align="center">
 
-# 👻 Phantom
+# Phantom
 
-**The open-source Cluely alternative for Windows.**
-A stealth AI overlay that gives you real-time answers during meetings, interviews, and coding sessions — without switching windows or paying a subscription.
+**Your invisible personal assistant for Windows.**
+A local AI overlay that gives you real-time answers during meetings, interviews, and coding sessions without switching windows or paying a subscription.
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078d4?logo=windows)](https://github.com)
@@ -14,7 +14,7 @@ A stealth AI overlay that gives you real-time answers during meetings, interview
 
 ---
 
-<img src="PhantomBanner.png" alt="Phantom — Your invisible personal assistant" width="100%" />
+<img src="PhantomBanner.png" alt="Phantom - Your invisible personal assistant" width="100%" />
 
 ---
 
@@ -26,7 +26,7 @@ A stealth AI overlay that gives you real-time answers during meetings, interview
 
 ## What is Phantom?
 
-Phantom is a **transparent AI assistant overlay** that floats invisibly on top of every window on your screen. It is a free, open-source alternative to Cluely — built for anyone who wants real-time AI help during live situations without paying $20–$40/month.
+Phantom is a **transparent AI assistant overlay** that floats above every window on your screen. It is built for personal, local-first AI help during live situations while keeping provider keys and conversation data under your control.
 
 **Use it for:**
 - **Job interviews** — get instant answers to technical questions while screen-sharing
@@ -62,27 +62,6 @@ Phantom is a **transparent AI assistant overlay** that floats invisibly on top o
 | **Streaming Responses** | Real-time token streaming for all built-in providers |
 | **Keyboard-Driven** | Every action has a configurable shortcut |
 | **No Paywall** | GPL-3.0 open source. Forever free. |
-
----
-
-## Phantom vs Cluely
-
-Cluely (and tools like it) are paid, closed-source screen AI assistants. Phantom gives you the same core capability — a stealth overlay that answers questions in real time — with zero cost and full control over your data.
-
-| | Phantom | Cluely |
-|---|---|---|
-| **Price** | Free forever | $20–$40/month |
-| **Open source** | ✅ GPL-3.0 | ❌ Closed |
-| **AI provider** | Any (your own key) | Locked to their API |
-| **Data privacy** | 100% local | Sent to their servers |
-| **Telemetry** | None | Yes |
-| **Custom providers** | ✅ Any curl-compatible API | ❌ |
-| **System audio** | ✅ Windows loopback | ✅ |
-| **Screenshot analysis** | ✅ Full & region capture | ✅ |
-| **Platform** | Windows (Mac WIP) | Mac + Windows |
-| **Screen recording protection** | ✅ | ✅ |
-
-> Phantom won't auto-generate interview answers or do real-time meeting summaries out of the box — those are prompting strategies you configure with your own system prompts. What Phantom does is put any AI model one keystroke away, invisible, above every window.
 
 ---
 
@@ -418,6 +397,6 @@ Made for people who think faster than they can switch windows.
 
 ---
 
-**Keywords:** Cluely alternative · open source Cluely · AI overlay Windows · invisible AI assistant · meeting AI assistant · interview AI assistant · real-time AI help · screen overlay AI · stealth AI · AI assistant that stays on screen · free Cluely alternative · AI during interviews · AI for meetings · coding AI overlay
+**Keywords:** AI overlay Windows, invisible AI assistant, meeting AI assistant, interview AI assistant, real-time AI help, screen overlay AI, local AI assistant, AI assistant that stays on screen, AI during interviews, AI for meetings, coding AI overlay
 
 </div>

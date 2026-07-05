@@ -2,6 +2,7 @@ export * from "./useVersion";
 export * from "./useCompletion";
 export * from "./useChatCompletion";
 export * from "./useWindow";
+export * from "./useOverlayScale";
 export * from "./useCustomProvider";
 export * from "./useCustomSttProviders";
 export * from "./useSettings";

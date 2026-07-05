@@ -13,6 +13,7 @@ const {
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 const { Blob } = require("node:buffer");
 const initSqlJs = require("sql.js");
 
@@ -21,17 +22,32 @@ const TOP_OFFSET = 54;
 const MAIN_WINDOW_WIDTH = 560;
 const MAIN_WINDOW_COLLAPSED_HEIGHT = 52;
 const MAIN_WINDOW_EXPANDED_FALLBACK_HEIGHT = 720;
+const RESPONSE_WINDOW_MAX_HEIGHT = 560;
+const OVERLAY_SCALE_MIN = 0.85;
+const OVERLAY_SCALE_MAX = 1.25;
+const OVERLAY_SCALE_STEP = 0.05;
+const ALWAYS_ON_TOP_LEVEL = "screen-saver";
+const ALWAYS_ON_TOP_RELATIVE_LEVEL = 1;
+const PROVIDER_API_KEY_VAULT_STORAGE_KEY = "provider_api_key_vault";
+const DEFAULT_DISPLAY_SETTINGS = {
+  overlayDisplayId: null,
+  captureDisplayIds: [],
+};
 
 let mainWindow;
 let dashboardWindow;
 let responseWindow;
 let lastResponseWindowState = null;
+let alwaysOnTopEnabled = false;
+let zOrderReassertTimer = null;
 let sqlPromise;
 let sqlDb;
 let registeredShortcuts = new Map();
 let captureImages = new Map();
 let secureStorageCache;
 let activeHttpRequests = new Map();
+let ocrWorkerPromise = null;
+let ocrQueue = Promise.resolve();
 const DB_FILE_NAME = "phantom.db";
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -183,9 +199,152 @@ async function handleHttpFetch(request) {
   };
 }
 
+function getDisplayDescriptors() {
+  const primaryId = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((display, index) => ({
+    id: String(display.id),
+    index,
+    label: `Display ${index + 1}${display.id === primaryId ? " (Primary)" : ""}`,
+    bounds: display.bounds,
+    workArea: display.workArea,
+    size: display.size,
+    scaleFactor: display.scaleFactor,
+    isPrimary: display.id === primaryId,
+  }));
+}
+
+function normalizeDisplaySettings(settings = {}) {
+  const displayIds = new Set(getDisplayDescriptors().map((display) => display.id));
+  const primaryId = String(screen.getPrimaryDisplay().id);
+  const overlayDisplayId = displayIds.has(String(settings.overlayDisplayId || ""))
+    ? String(settings.overlayDisplayId)
+    : primaryId;
+  const captureDisplayIds = Array.isArray(settings.captureDisplayIds)
+    ? settings.captureDisplayIds
+        .map((id) => String(id))
+        .filter((id) => displayIds.has(id))
+    : [];
+
+  return {
+    overlayDisplayId,
+    captureDisplayIds: captureDisplayIds.length
+      ? [...new Set(captureDisplayIds)]
+      : [overlayDisplayId],
+  };
+}
+
+function readDisplaySettings() {
+  return normalizeDisplaySettings(
+    readAppSettings().displaySettings || DEFAULT_DISPLAY_SETTINGS
+  );
+}
+
+function writeDisplaySettings(nextSettings) {
+  const settings = readAppSettings();
+  settings.displaySettings = normalizeDisplaySettings(nextSettings);
+  writeAppSettings(settings);
+  return settings.displaySettings;
+}
+
+function getDisplayById(displayId) {
+  return (
+    screen
+      .getAllDisplays()
+      .find((display) => String(display.id) === String(displayId)) ||
+    screen.getPrimaryDisplay()
+  );
+}
+
+function getOverlayDisplay() {
+  return getDisplayById(readDisplaySettings().overlayDisplayId);
+}
+
+function getCaptureDisplays() {
+  const settings = readDisplaySettings();
+  return settings.captureDisplayIds.map((id) => getDisplayById(id));
+}
+
+function getDisplayConfigurationInfo() {
+  return {
+    displays: getDisplayDescriptors(),
+    settings: readDisplaySettings(),
+  };
+}
+
+function clampOverlayScale(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Number(
+    Math.min(OVERLAY_SCALE_MAX, Math.max(OVERLAY_SCALE_MIN, numeric)).toFixed(2)
+  );
+}
+
+function readOverlayScale() {
+  return clampOverlayScale(readAppSettings().overlayScale ?? 1);
+}
+
+function writeOverlayScale(value) {
+  const settings = readAppSettings();
+  settings.overlayScale = clampOverlayScale(value);
+  writeAppSettings(settings);
+  return settings.overlayScale;
+}
+
+function getOverlayMetrics(scale = readOverlayScale()) {
+  const normalizedScale = clampOverlayScale(scale);
+  return {
+    scale: normalizedScale,
+    min: OVERLAY_SCALE_MIN,
+    max: OVERLAY_SCALE_MAX,
+    step: OVERLAY_SCALE_STEP,
+    width: Math.round(MAIN_WINDOW_WIDTH * normalizedScale),
+    collapsedHeight: Math.round(MAIN_WINDOW_COLLAPSED_HEIGHT * normalizedScale),
+    expandedHeight: Math.round(
+      MAIN_WINDOW_EXPANDED_FALLBACK_HEIGHT * normalizedScale
+    ),
+    responseHeight: Math.round(RESPONSE_WINDOW_MAX_HEIGHT * normalizedScale),
+  };
+}
+
+function getOverlayScaleInfo() {
+  return getOverlayMetrics();
+}
+
+function normalizeRequestedWindowHeight(height) {
+  const metrics = getOverlayMetrics();
+  const requestedHeight = Number(height);
+  if (!Number.isFinite(requestedHeight)) return metrics.expandedHeight;
+  if (requestedHeight <= MAIN_WINDOW_COLLAPSED_HEIGHT + 16) {
+    return metrics.collapsedHeight;
+  }
+  if (requestedHeight >= MAIN_WINDOW_EXPANDED_FALLBACK_HEIGHT - 16) {
+    return metrics.expandedHeight;
+  }
+  return requestedHeight;
+}
+
+function applyOverlayScale(value) {
+  const scale = writeOverlayScale(value);
+  const metrics = getOverlayMetrics(scale);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const currentBounds = mainWindow.getBounds();
+    const nextHeight =
+      currentBounds.height <= MAIN_WINDOW_COLLAPSED_HEIGHT + 24
+        ? metrics.collapsedHeight
+        : clampMainWindowHeight(currentBounds.height);
+    resizeMainWindow(nextHeight);
+  }
+
+  syncResponseWindowToMain();
+  emitToAll("overlay-scale-changed", metrics);
+  scheduleZOrderReassertion();
+  return metrics;
+}
+
 function positionMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const display = screen.getPrimaryDisplay();
+  const display = getOverlayDisplay();
   const bounds = display.workArea;
   const [width] = mainWindow.getSize();
   mainWindow.setPosition(
@@ -195,18 +354,17 @@ function positionMainWindow() {
 }
 
 function clampMainWindowHeight(height) {
-  const display = screen.getPrimaryDisplay();
+  const display = getOverlayDisplay();
+  const metrics = getOverlayMetrics();
   const maxHeight = Math.max(
-    MAIN_WINDOW_COLLAPSED_HEIGHT,
+    metrics.collapsedHeight,
     display.workArea.height - TOP_OFFSET - 8
   );
-  const requestedHeight = Number.isFinite(Number(height))
-    ? Number(height)
-    : MAIN_WINDOW_EXPANDED_FALLBACK_HEIGHT;
+  const requestedHeight = normalizeRequestedWindowHeight(height);
 
   return Math.round(
     Math.min(
-      Math.max(requestedHeight, MAIN_WINDOW_COLLAPSED_HEIGHT),
+      Math.max(requestedHeight, metrics.collapsedHeight),
       maxHeight
     )
   );
@@ -215,40 +373,53 @@ function clampMainWindowHeight(height) {
 function resizeMainWindow(height) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
+  const metrics = getOverlayMetrics();
   const nextHeight = clampMainWindowHeight(height);
-  const [currentX, currentY] = mainWindow.getPosition();
+  const currentBounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(currentBounds);
+  const workArea = display.workArea;
+  const nextX = Math.round(
+    currentBounds.x + (currentBounds.width - metrics.width) / 2
+  );
+  const maxX = workArea.x + workArea.width - metrics.width;
+  const clampedX = Math.min(Math.max(nextX, workArea.x), Math.max(workArea.x, maxX));
   mainWindow.setBounds(
     {
-      x: currentX,
-      y: currentY,
-      width: MAIN_WINDOW_WIDTH,
+      x: clampedX,
+      y: currentBounds.y,
+      width: metrics.width,
       height: nextHeight,
     },
     false
   );
+  syncResponseWindowToMain();
 }
 
 function getResponseWindowBounds() {
-  const display = screen.getPrimaryDisplay();
+  const metrics = getOverlayMetrics();
+  const display =
+    mainWindow && !mainWindow.isDestroyed()
+      ? screen.getDisplayMatching(mainWindow.getBounds())
+      : getOverlayDisplay();
   const workArea = display.workArea;
   const mainBounds =
     mainWindow && !mainWindow.isDestroyed()
       ? mainWindow.getBounds()
       : {
-          x: Math.round(workArea.x + (workArea.width - MAIN_WINDOW_WIDTH) / 2),
+          x: Math.round(workArea.x + (workArea.width - metrics.width) / 2),
           y: Math.round(workArea.y + TOP_OFFSET),
-          width: MAIN_WINDOW_WIDTH,
-          height: MAIN_WINDOW_COLLAPSED_HEIGHT,
+          width: metrics.width,
+          height: metrics.collapsedHeight,
         };
   const gap = 8;
-  const y = mainBounds.y + MAIN_WINDOW_COLLAPSED_HEIGHT + gap;
+  const y = mainBounds.y + metrics.collapsedHeight + gap;
   const maxHeight = Math.max(260, workArea.y + workArea.height - y - 12);
 
   return {
     x: mainBounds.x,
     y,
-    width: MAIN_WINDOW_WIDTH,
-    height: Math.min(560, maxHeight),
+    width: metrics.width,
+    height: Math.min(metrics.responseHeight, maxHeight),
   };
 }
 
@@ -280,29 +451,137 @@ function createBaseWindow(label, options) {
   return win;
 }
 
+function readAlwaysOnTopSetting() {
+  const settings = readAppSettings();
+  if (!settings.alwaysOnTopDefaultEnabledMigrated) {
+    settings.alwaysOnTopDefaultEnabledMigrated = true;
+    if (settings.alwaysOnTopEnabled !== true) {
+      settings.alwaysOnTopEnabled = true;
+    }
+    writeAppSettings(settings);
+  }
+  return settings.alwaysOnTopEnabled !== false;
+}
+
+function writeAlwaysOnTopSetting(enabled) {
+  const settings = readAppSettings();
+  settings.alwaysOnTopEnabled = Boolean(enabled);
+  writeAppSettings(settings);
+}
+
+function isCaptureWindow(win) {
+  const args = win.webContents.getLastWebPreferences?.()?.additionalArguments || [];
+  return args.some((item) =>
+    item.startsWith("--phantom-window-label=capture-overlay-")
+  );
+}
+
+function applyOverlayZOrder(win, enabled, options = {}) {
+  if (!win || win.isDestroyed()) return;
+
+  const shouldFloat = Boolean(enabled);
+  try {
+    win.setAlwaysOnTop(
+      shouldFloat,
+      ALWAYS_ON_TOP_LEVEL,
+      ALWAYS_ON_TOP_RELATIVE_LEVEL
+    );
+  } catch {
+    win.setAlwaysOnTop(shouldFloat);
+  }
+
+  if (process.platform !== "win32") {
+    try {
+      win.setVisibleOnAllWorkspaces(shouldFloat, {
+        visibleOnFullScreen: shouldFloat,
+        skipTransformProcessType: true,
+      });
+    } catch {
+      // Some platforms/window managers do not support fullscreen workspace pinning.
+    }
+  }
+
+  if (shouldFloat && options.forceTop && win.isVisible()) {
+    try {
+      win.moveTop();
+    } catch {
+      // moveTop can fail while Electron is tearing down a window.
+    }
+  }
+}
+
+function applyAllOverlayZOrder(options = {}) {
+  applyOverlayZOrder(mainWindow, alwaysOnTopEnabled, options);
+  applyOverlayZOrder(responseWindow, true, options);
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win === mainWindow || win === dashboardWindow || win === responseWindow) {
+      continue;
+    }
+    if (isCaptureWindow(win)) {
+      applyOverlayZOrder(win, true, options);
+    }
+  }
+}
+
+function scheduleZOrderReassertion(delay = 60) {
+  if (zOrderReassertTimer) {
+    clearTimeout(zOrderReassertTimer);
+  }
+  zOrderReassertTimer = setTimeout(() => {
+    zOrderReassertTimer = null;
+    applyAllOverlayZOrder({ forceTop: true });
+  }, delay);
+}
+
+function showMainWindowAndReassert(options = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const shouldFocus = options.focus !== false;
+  mainWindow.show();
+  applyOverlayZOrder(mainWindow, alwaysOnTopEnabled, { forceTop: true });
+  if (shouldFocus) {
+    mainWindow.focus();
+  }
+  scheduleZOrderReassertion();
+}
+
 function createMainWindow() {
+  const metrics = getOverlayMetrics();
   mainWindow = createBaseWindow("main", {
     title: "Phantom - AI Assistant",
-    width: MAIN_WINDOW_WIDTH,
-    height: MAIN_WINDOW_COLLAPSED_HEIGHT,
+    width: metrics.width,
+    height: metrics.collapsedHeight,
     frame: false,
     transparent: true,
     resizable: false,
     show: true,
     skipTaskbar: true,
-    alwaysOnTop: false,
+    alwaysOnTop: alwaysOnTopEnabled,
     hasShadow: false,
     backgroundColor: "#00000000",
   });
+  applyOverlayZOrder(mainWindow, alwaysOnTopEnabled);
   mainWindow.loadURL(getIndexUrl("/"));
   mainWindow.once("ready-to-show", () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     positionMainWindow();
     mainWindow.show();
+    applyOverlayZOrder(mainWindow, alwaysOnTopEnabled, { forceTop: true });
   });
-  mainWindow.on("focus", () => sendToWindow(mainWindow, "focus-changed", true));
-  mainWindow.on("blur", () => sendToWindow(mainWindow, "focus-changed", false));
-  mainWindow.on("move", syncResponseWindowToMain);
+  mainWindow.on("show", () => scheduleZOrderReassertion());
+  mainWindow.on("restore", () => scheduleZOrderReassertion());
+  mainWindow.on("focus", () => {
+    sendToWindow(mainWindow, "focus-changed", true);
+    scheduleZOrderReassertion();
+  });
+  mainWindow.on("blur", () => {
+    sendToWindow(mainWindow, "focus-changed", false);
+    scheduleZOrderReassertion();
+  });
+  mainWindow.on("move", () => {
+    syncResponseWindowToMain();
+    scheduleZOrderReassertion();
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -361,11 +640,19 @@ function createResponseWindow() {
   });
 
   responseWindow.loadURL(getIndexUrl("/response-overlay"));
+  applyOverlayZOrder(responseWindow, true, { forceTop: true });
   responseWindow.on("closed", () => {
     responseWindow = null;
   });
-  responseWindow.on("blur", () => sendToWindow(responseWindow, "focus-changed", false));
-  responseWindow.on("focus", () => sendToWindow(responseWindow, "focus-changed", true));
+  responseWindow.on("show", () => scheduleZOrderReassertion());
+  responseWindow.on("blur", () => {
+    sendToWindow(responseWindow, "focus-changed", false);
+    scheduleZOrderReassertion();
+  });
+  responseWindow.on("focus", () => {
+    sendToWindow(responseWindow, "focus-changed", true);
+    scheduleZOrderReassertion();
+  });
 
   return responseWindow;
 }
@@ -381,9 +668,7 @@ function updateResponseWindow(state) {
   const win = createResponseWindow();
   syncResponseWindowToMain();
   win.setIgnoreMouseEvents(false);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    win.setAlwaysOnTop(true);
-  }
+  applyOverlayZOrder(win, true, { forceTop: true });
 
   const sendState = () =>
     sendToWindow(win, "response-window-state", lastResponseWindowState);
@@ -396,6 +681,7 @@ function updateResponseWindow(state) {
 
   if (!win.isVisible()) {
     win.showInactive();
+    scheduleZOrderReassertion();
   }
 
   return null;
@@ -465,6 +751,8 @@ function normalizeAccelerator(key) {
         down: "Down",
         left: "Left",
         right: "Right",
+        enter: "Enter",
+        return: "Enter",
         escape: "Esc",
         esc: "Esc",
         space: "Space",
@@ -486,6 +774,7 @@ function moveMainWindow(direction, step = 12) {
   if (next) {
     mainWindow.setPosition(next[0], next[1]);
     syncResponseWindowToMain();
+    scheduleZOrderReassertion();
   }
 }
 
@@ -505,8 +794,7 @@ function handleShortcut(actionId) {
       hideResponseWindow({ destroy: true });
       emitToAll("toggle-window-visibility", true);
     } else {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindowAndReassert();
       emitToAll("toggle-window-visibility", false);
       sendToWindow(mainWindow, "focus-text-input", {});
     }
@@ -514,8 +802,7 @@ function handleShortcut(actionId) {
   }
   if (actionId === "focus_input") {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindowAndReassert();
       sendToWindow(mainWindow, "focus-text-input", {});
     }
     return;
@@ -526,8 +813,7 @@ function handleShortcut(actionId) {
   }
   if (actionId === "audio_recording") {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindowAndReassert();
       sendToWindow(mainWindow, "start-audio-recording", {});
     }
     return;
@@ -538,8 +824,7 @@ function handleShortcut(actionId) {
   }
   if (actionId === "system_audio") {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show();
-      mainWindow.focus();
+      showMainWindowAndReassert();
       sendToWindow(mainWindow, "toggle-system-audio", {});
     }
     return;
@@ -639,6 +924,294 @@ function decodeSecret(item) {
     }
   }
   return item.value;
+}
+
+function getEmptyProviderApiKeyVault() {
+  return { ai: {}, stt: {} };
+}
+
+function normalizeProviderApiKeyVault(vault) {
+  const normalized = getEmptyProviderApiKeyVault();
+  if (!vault || typeof vault !== "object") return normalized;
+
+  for (const kind of ["ai", "stt"]) {
+    const providers = vault[kind];
+    if (!providers || typeof providers !== "object") continue;
+    for (const [providerId, profiles] of Object.entries(providers)) {
+      if (!providerId || !Array.isArray(profiles)) continue;
+      normalized[kind][providerId] = profiles
+        .filter((profile) => profile && typeof profile === "object")
+        .map((profile) => ({
+          id: String(profile.id || `${providerId}-${Date.now()}`),
+          name: String(profile.name || "API key"),
+          value: String(profile.value || ""),
+          createdAt: String(profile.createdAt || new Date().toISOString()),
+          updatedAt: String(profile.updatedAt || new Date().toISOString()),
+        }))
+        .filter((profile) => profile.value.trim());
+    }
+  }
+
+  return normalized;
+}
+
+function readProviderApiKeyVault() {
+  const data = readSecureStorage();
+  const decoded = decodeSecret(data[PROVIDER_API_KEY_VAULT_STORAGE_KEY]);
+  if (!decoded) return getEmptyProviderApiKeyVault();
+
+  try {
+    return normalizeProviderApiKeyVault(JSON.parse(decoded));
+  } catch {
+    return getEmptyProviderApiKeyVault();
+  }
+}
+
+function writeProviderApiKeyVault(vault) {
+  const data = readSecureStorage();
+  data[PROVIDER_API_KEY_VAULT_STORAGE_KEY] = encodeSecret(
+    JSON.stringify(normalizeProviderApiKeyVault(vault))
+  );
+  writeSecureStorage(data);
+}
+
+function resolveUnpackedPath(filePath) {
+  if (!app.isPackaged || !filePath.includes("app.asar")) {
+    return filePath;
+  }
+  const unpackedPath = filePath.replace("app.asar", "app.asar.unpacked");
+  return fs.existsSync(unpackedPath) ? unpackedPath : filePath;
+}
+
+function getModuleDir(moduleName) {
+  return resolveUnpackedPath(
+    path.dirname(require.resolve(path.join(moduleName, "package.json")))
+  );
+}
+
+async function getOcrWorker(language = "eng") {
+  const normalizedLanguage = language === "eng" ? "eng" : "eng";
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      const { createWorker, OEM, PSM } = require("tesseract.js");
+      const tesseractDir = getModuleDir("tesseract.js");
+      const coreDir = getModuleDir("tesseract.js-core");
+      const langDir = path.join(
+        getModuleDir("@tesseract.js-data/eng"),
+        "4.0.0_best_int"
+      );
+      const worker = await createWorker(normalizedLanguage, OEM.LSTM_ONLY, {
+        workerPath: path.join(
+          tesseractDir,
+          "src",
+          "worker-script",
+          "node",
+          "index.js"
+        ),
+        corePath: coreDir,
+        langPath: langDir,
+        cacheMethod: "none",
+        gzip: true,
+        logger: () => {},
+      });
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: PSM.AUTO,
+        user_defined_dpi: "300",
+      });
+      return worker;
+    })().catch((error) => {
+      ocrWorkerPromise = null;
+      throw error;
+    });
+  }
+  return ocrWorkerPromise;
+}
+
+function normalizeOcrText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function extractOcrText(args = {}) {
+  const rawBase64 = String(args.imageBase64 || args.image_base64 || "");
+  const imageBase64 = rawBase64.includes(",")
+    ? rawBase64.split(",").pop()
+    : rawBase64;
+  if (!imageBase64.trim()) {
+    throw new Error("OCR requires a screenshot image");
+  }
+
+  const startedAt = Date.now();
+  const worker = await getOcrWorker(args.language || "eng");
+  const imageBuffer = Buffer.from(imageBase64, "base64");
+  const result = await worker.recognize(imageBuffer);
+  return {
+    text: normalizeOcrText(result?.data?.text || ""),
+    confidence: Number(result?.data?.confidence || 0),
+    durationMs: Date.now() - startedAt,
+  };
+}
+
+function enqueueOcrExtraction(args) {
+  const run = ocrQueue
+    .catch(() => {})
+    .then(() => extractOcrText(args));
+  ocrQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+async function terminateOcrWorker() {
+  const workerPromise = ocrWorkerPromise;
+  ocrWorkerPromise = null;
+  if (!workerPromise) return;
+  try {
+    const worker = await workerPromise;
+    await worker.terminate();
+  } catch {
+    // The OCR worker may already be torn down during app shutdown.
+  }
+}
+
+function quotePowerShellSingle(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function getPowerShellPath() {
+  if (process.platform !== "win32") return "powershell";
+  return process.env.SystemRoot
+    ? path.join(
+        process.env.SystemRoot,
+        "System32",
+        "WindowsPowerShell",
+        "v1.0",
+        "powershell.exe"
+      )
+    : "powershell.exe";
+}
+
+function getAccessibilityScriptPath() {
+  return resolveUnpackedPath(path.join(__dirname, "accessibility-text.ps1"));
+}
+
+function normalizeAccessibilityText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function runPowerShell(command, timeoutMs = 9000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      getPowerShellPath(),
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        command,
+      ],
+      {
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      }
+    );
+
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error("Windows accessibility text extraction timed out."));
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(
+          new Error(
+            stderr.trim() ||
+              stdout.trim() ||
+              `PowerShell exited with code ${code}`
+          )
+        );
+        return;
+      }
+      resolve(stdout.trim());
+    });
+  });
+}
+
+async function extractAccessibilityText(args = {}) {
+  const startedAt = Date.now();
+  if (process.platform !== "win32") {
+    return {
+      text: "",
+      windowTitle: "",
+      processId: 0,
+      elementCount: 0,
+      durationMs: 0,
+      truncated: false,
+      unsupportedPlatform: true,
+      error: "Phantom Ultra Instinct Mode is only available on Windows.",
+    };
+  }
+
+  const maxChars = Math.max(
+    1,
+    Math.min(Number(args.maxChars || args.max_chars || 8000), 20000)
+  );
+  const config = {
+    maxChars,
+    excludeProcessId: process.pid,
+    appName: app.getName() || "Phantom",
+  };
+
+  const scriptPath = getAccessibilityScriptPath();
+  const command = `. ${quotePowerShellSingle(
+    scriptPath
+  )}; Invoke-PhantomAccessibilityText -ConfigJson ${quotePowerShellSingle(
+    JSON.stringify(config)
+  )}`;
+  const raw = await runPowerShell(command);
+  if (!raw) {
+    throw new Error("Windows accessibility text extraction returned no data.");
+  }
+
+  const parsed = JSON.parse(raw);
+  return {
+    text: normalizeAccessibilityText(parsed.text),
+    windowTitle: String(parsed.windowTitle || ""),
+    processId: Number(parsed.processId || 0),
+    elementCount: Number(parsed.elementCount || 0),
+    durationMs: Number(parsed.durationMs || Date.now() - startedAt),
+    truncated: Boolean(parsed.truncated),
+    unsupportedPlatform: false,
+    error: parsed.error ? String(parsed.error) : null,
+  };
 }
 
 function getAppSettingsPath() {
@@ -839,8 +1412,13 @@ async function captureDisplayBase64(display) {
 async function startSelectionCapture() {
   captureImages.clear();
   const displays = screen.getAllDisplays();
+  const selectedDisplayIds = new Set(
+    getCaptureDisplays().map((display) => String(display.id))
+  );
   for (let index = 0; index < displays.length; index += 1) {
     const display = displays[index];
+    if (!selectedDisplayIds.has(String(display.id))) continue;
+
     const source = await getScreenSourceForDisplay(display);
     captureImages.set(index, {
       image: source.thumbnail,
@@ -863,10 +1441,12 @@ async function startSelectionCapture() {
       focusable: true,
       backgroundColor: "#00000000",
     });
+    applyOverlayZOrder(win, true, { forceTop: true });
     win.loadURL(getIndexUrl("/"));
     win.once("ready-to-show", () => {
       win.show();
       win.focus();
+      applyOverlayZOrder(win, true, { forceTop: true });
     });
   }
 }
@@ -893,11 +1473,7 @@ function closeCaptureWindows() {
 }
 
 function getTargetDisplayForMainWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return screen.getPrimaryDisplay();
-  }
-  const bounds = mainWindow.getBounds();
-  return screen.getDisplayMatching(bounds);
+  return getOverlayDisplay();
 }
 
 function maskKey(key) {
@@ -965,14 +1541,29 @@ async function handleInvoke(command, args = {}) {
         mainWindow.setSkipTaskbar(!args.visible);
       }
       return null;
+    case "get_display_configuration":
+      return getDisplayConfigurationInfo();
+    case "get_overlay_scale":
+      return getOverlayScaleInfo();
+    case "set_overlay_scale":
+      return applyOverlayScale(args.scale);
+    case "adjust_overlay_scale":
+      return applyOverlayScale(readOverlayScale() + Number(args.delta || 0));
+    case "update_display_configuration": {
+      const settings = writeDisplaySettings(args.settings || {});
+      positionMainWindow();
+      syncResponseWindowToMain();
+      scheduleZOrderReassertion();
+      return {
+        displays: getDisplayDescriptors(),
+        settings,
+      };
+    }
     case "set_always_on_top":
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setAlwaysOnTop(Boolean(args.enabled));
-      }
-      if (responseWindow && !responseWindow.isDestroyed()) {
-        responseWindow.setAlwaysOnTop(true);
-      }
-      return null;
+      alwaysOnTopEnabled = Boolean(args.enabled);
+      writeAlwaysOnTopSetting(alwaysOnTopEnabled);
+      applyAllOverlayZOrder({ forceTop: alwaysOnTopEnabled });
+      return { enabled: alwaysOnTopEnabled };
     case "exit_app":
       app.quit();
       return null;
@@ -1020,6 +1611,15 @@ async function handleInvoke(command, args = {}) {
       writeSecureStorage(data);
       return null;
     }
+    case "provider_key_vault_get":
+      return readProviderApiKeyVault();
+    case "provider_key_vault_save":
+      writeProviderApiKeyVault(args.vault);
+      return readProviderApiKeyVault();
+    case "accessibility_extract_text":
+      return extractAccessibilityText(args);
+    case "ocr_extract_text":
+      return enqueueOcrExtraction(args);
     case "fetch_models":
       return defaultModels;
     case "fetch_prompts":
@@ -1123,12 +1723,23 @@ async function handleInvoke(command, args = {}) {
 
 app.whenReady().then(async () => {
   app.setName("Phantom");
+  alwaysOnTopEnabled = readAlwaysOnTopSetting();
 
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ["screen"] }).then((sources) => {
       callback({ video: sources[0], audio: "loopback" });
     });
   });
+
+  const handleDisplayChange = () => {
+    positionMainWindow();
+    syncResponseWindowToMain();
+    scheduleZOrderReassertion();
+    emitToAll("display-configuration-changed", getDisplayConfigurationInfo());
+  };
+  screen.on("display-added", handleDisplayChange);
+  screen.on("display-removed", handleDisplayChange);
+  screen.on("display-metrics-changed", handleDisplayChange);
 
   ipcMain.handle("phantom:invoke", (_event, command, args) =>
     handleInvoke(command, args)
@@ -1153,10 +1764,7 @@ app.on("second-instance", () => {
     createMainWindow();
     return;
   }
-  if (!mainWindow.isVisible()) {
-    mainWindow.show();
-  }
-  mainWindow.focus();
+  showMainWindowAndReassert();
 });
 
 app.on("window-all-closed", () => {
@@ -1165,10 +1773,15 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  void terminateOcrWorker();
   for (const controller of activeHttpRequests.values()) {
     controller.abort();
   }
   activeHttpRequests.clear();
+  if (zOrderReassertTimer) {
+    clearTimeout(zOrderReassertTimer);
+    zOrderReassertTimer = null;
+  }
   globalShortcut.unregisterAll();
   persistDb();
 });
