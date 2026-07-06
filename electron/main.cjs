@@ -5,12 +5,14 @@ const {
   dialog,
   globalShortcut,
   ipcMain,
+  Menu,
   nativeImage,
   safeStorage,
   screen,
   session,
   shell,
   systemPreferences,
+  Tray,
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -38,6 +40,7 @@ const DEFAULT_DISPLAY_SETTINGS = {
 let mainWindow;
 let dashboardWindow;
 let responseWindow;
+let tray;
 let lastResponseWindowState = null;
 let alwaysOnTopEnabled = false;
 let zOrderReassertTimer = null;
@@ -49,6 +52,7 @@ let secureStorageCache;
 let activeHttpRequests = new Map();
 let ocrWorkerPromise = null;
 let ocrQueue = Promise.resolve();
+const sessionModelCooldowns = new Map();
 const DB_FILE_NAME = "phantom.db";
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -73,6 +77,15 @@ function getAppIcon() {
   return icon.isEmpty() ? undefined : icon;
 }
 
+function getTrayIcon() {
+  const iconPath = path.join(app.getAppPath(), "build", "icon.ico");
+  const fallbackPath = path.join(app.getAppPath(), "build", "icon.png");
+  const candidatePath = fs.existsSync(iconPath) ? iconPath : fallbackPath;
+  if (!fs.existsSync(candidatePath)) return undefined;
+  const icon = nativeImage.createFromPath(candidatePath);
+  return icon.isEmpty() ? undefined : icon;
+}
+
 function getIndexUrl(route = "/") {
   if (isDev()) {
     return `${DEV_URL}/#${route}`;
@@ -85,6 +98,72 @@ function sendToWindow(win, event, payload) {
   if (win && !win.isDestroyed()) {
     win.webContents.send("phantom:event", { event, payload });
   }
+}
+
+function normalizeCooldownPart(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getCooldownKey(args = {}) {
+  const providerId = normalizeCooldownPart(args.providerId || args.provider_id);
+  const keyProfileId = normalizeCooldownPart(args.keyProfileId || args.key_profile_id);
+  const model = normalizeCooldownPart(args.model);
+  if (!providerId || !keyProfileId || !model) return "";
+  return `${providerId}::${keyProfileId}::${model}`;
+}
+
+function cleanupExpiredModelCooldowns(now = Date.now()) {
+  for (const [key, cooldown] of sessionModelCooldowns.entries()) {
+    if (Number(cooldown.expiresAt || 0) <= now) {
+      sessionModelCooldowns.delete(key);
+    }
+  }
+}
+
+function getSessionModelCooldowns() {
+  cleanupExpiredModelCooldowns();
+  return Array.from(sessionModelCooldowns.values()).sort(
+    (a, b) => Number(a.expiresAt || 0) - Number(b.expiresAt || 0)
+  );
+}
+
+function markSessionModelCooldown(args = {}) {
+  const key = getCooldownKey(args);
+  const expiresAt = Number(args.expiresAt || args.expires_at || 0);
+  if (!key || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return getSessionModelCooldowns();
+  }
+
+  sessionModelCooldowns.set(key, {
+    providerId: String(args.providerId || args.provider_id || ""),
+    keyProfileId: String(args.keyProfileId || args.key_profile_id || ""),
+    keyName: String(args.keyName || args.key_name || "saved key"),
+    model: String(args.model || ""),
+    reason: String(args.reason || "quota"),
+    blockedAt: Number(args.blockedAt || args.blocked_at || Date.now()),
+    expiresAt,
+  });
+  return getSessionModelCooldowns();
+}
+
+function clearSessionModelCooldown(args = {}) {
+  const key = getCooldownKey(args);
+  if (key) {
+    sessionModelCooldowns.delete(key);
+  }
+  return getSessionModelCooldowns();
+}
+
+function clearAllSessionModelCooldowns() {
+  sessionModelCooldowns.clear();
+  emitToAll("session-model-cooldowns-cleared", {});
+  return [];
+}
+
+function quitPhantom() {
+  app.isQuitting = true;
+  clearAllSessionModelCooldowns();
+  app.quit();
 }
 
 function hasScreenRecordingPermission() {
@@ -758,6 +837,71 @@ function toggleDashboard() {
   }
 }
 
+function hidePhantomWindows() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.hide();
+  }
+  hideResponseWindow({ destroy: true });
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.hide();
+  }
+}
+
+function setupTray() {
+  if (tray && !tray.isDestroyed()) return tray;
+
+  const trayIcon = getTrayIcon();
+  if (!trayIcon) return undefined;
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Phantom");
+  tray.on("click", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createMainWindow();
+    }
+    showMainWindowAndReassert({ focus: false });
+  });
+
+  const rebuildTrayMenu = () => {
+    const menu = Menu.buildFromTemplate([
+      {
+        label: "Show Phantom",
+        click: () => {
+          if (!mainWindow || mainWindow.isDestroyed()) {
+            createMainWindow();
+          }
+          showMainWindowAndReassert();
+        },
+      },
+      {
+        label: "Hide Phantom",
+        click: () => hidePhantomWindows(),
+      },
+      { type: "separator" },
+      {
+        label: "Open Dashboard",
+        click: () => showDashboard(),
+      },
+      {
+        label: "Clear Session Model Cooldowns",
+        click: () => {
+          clearAllSessionModelCooldowns();
+          rebuildTrayMenu();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Exit Phantom",
+        click: () => quitPhantom(),
+      },
+    ]);
+    tray.setContextMenu(menu);
+  };
+
+  rebuildTrayMenu();
+  return tray;
+}
+
 function normalizeAccelerator(key) {
   if (!key || typeof key !== "string") return "";
   return key
@@ -957,6 +1101,35 @@ function getEmptyProviderApiKeyVault() {
   return { ai: {}, stt: {} };
 }
 
+function normalizeProviderModelProfiles(models) {
+  if (!Array.isArray(models)) return [];
+
+  const now = new Date().toISOString();
+  const seen = new Set();
+  return models
+    .filter((model) => model && typeof model === "object")
+    .map((model) => {
+      const modelCode = String(model.model || "").trim();
+      return {
+        id: String(model.id || `model-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+        label: String(model.label || modelCode || "Model"),
+        model: modelCode,
+        enabled: model.enabled !== false,
+        source: ["suggested", "custom", "discovered"].includes(model.source)
+          ? model.source
+          : "custom",
+        createdAt: String(model.createdAt || now),
+        updatedAt: String(model.updatedAt || now),
+      };
+    })
+    .filter((model) => {
+      const key = model.model.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function normalizeProviderApiKeyVault(vault) {
   const normalized = getEmptyProviderApiKeyVault();
   if (!vault || typeof vault !== "object") return normalized;
@@ -972,6 +1145,7 @@ function normalizeProviderApiKeyVault(vault) {
           id: String(profile.id || `${providerId}-${Date.now()}`),
           name: String(profile.name || "API key"),
           value: String(profile.value || ""),
+          models: normalizeProviderModelProfiles(profile.models),
           createdAt: String(profile.createdAt || new Date().toISOString()),
           updatedAt: String(profile.updatedAt || new Date().toISOString()),
         }))
@@ -1647,7 +1821,7 @@ async function handleInvoke(command, args = {}) {
       applyAllOverlayZOrder({ forceTop: alwaysOnTopEnabled });
       return { enabled: alwaysOnTopEnabled };
     case "exit_app":
-      app.quit();
+      quitPhantom();
       return null;
     case "check_shortcuts_registered":
       return registeredShortcuts.size > 0;
@@ -1698,6 +1872,14 @@ async function handleInvoke(command, args = {}) {
     case "provider_key_vault_save":
       writeProviderApiKeyVault(args.vault);
       return readProviderApiKeyVault();
+    case "provider_model_cooldowns_get":
+      return getSessionModelCooldowns();
+    case "provider_model_cooldown_mark":
+      return markSessionModelCooldown(args);
+    case "provider_model_cooldown_clear":
+      return clearSessionModelCooldown(args);
+    case "provider_model_cooldowns_clear_all":
+      return clearAllSessionModelCooldowns();
     case "accessibility_extract_text":
       return extractAccessibilityText(args);
     case "ocr_extract_text":
@@ -1843,6 +2025,7 @@ app.whenReady().then(async () => {
 
   createMainWindow();
   createDashboardWindow();
+  setupTray();
   await getDb();
 });
 
@@ -1855,11 +2038,15 @@ app.on("second-instance", () => {
 });
 
 app.on("window-all-closed", () => {
+  if (!app.isQuitting && tray && !tray.isDestroyed()) {
+    return;
+  }
   if (process.platform !== "darwin") app.quit();
 });
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  sessionModelCooldowns.clear();
   void terminateOcrWorker();
   for (const controller of activeHttpRequests.values()) {
     controller.abort();
@@ -1871,4 +2058,8 @@ app.on("before-quit", () => {
   }
   globalShortcut.unregisterAll();
   persistDb();
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+  }
+  tray = null;
 });

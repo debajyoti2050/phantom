@@ -18,6 +18,8 @@ import {
   prepareAccessibilityTextPayload,
   prepareScreenshotPayload,
   ScreenshotTextContext,
+  AIResponseActivity,
+  AIResponseRoute,
 } from "@/lib";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -55,6 +57,8 @@ interface CompletionState {
   notice: string | null;
   attachedFiles: AttachedFile[];
   ocrContexts: ScreenshotTextContext[];
+  responseActivities: AIResponseActivity[];
+  responseRoute: AIResponseRoute | null;
   currentConversationId: string | null;
   conversationHistory: ChatMessage[];
 }
@@ -66,6 +70,7 @@ export const useCompletion = () => {
     systemPrompt,
     screenshotConfiguration,
     setScreenshotConfiguration,
+    onSetSelectedAIProvider,
   } = useApp();
   const globalShortcuts = useGlobalShortcuts();
 
@@ -77,6 +82,8 @@ export const useCompletion = () => {
     notice: null,
     attachedFiles: [],
     ocrContexts: [],
+    responseActivities: [],
+    responseRoute: null,
     currentConversationId: null,
     conversationHistory: [],
   });
@@ -122,6 +129,20 @@ export const useCompletion = () => {
 
   const setResponse = useCallback((value: string) => {
     setState((prev) => ({ ...prev, response: value }));
+  }, []);
+
+  const appendResponseActivity = useCallback((activity: AIResponseActivity) => {
+    setState((prev) => ({
+      ...prev,
+      responseActivities: [...prev.responseActivities, activity].slice(-6),
+    }));
+  }, []);
+
+  const setResponseRoute = useCallback((route: AIResponseRoute | null) => {
+    setState((prev) => ({
+      ...prev,
+      responseRoute: route,
+    }));
   }, []);
 
   const addFile = useCallback(async (file: File) => {
@@ -246,6 +267,8 @@ export const useCompletion = () => {
           error: null,
           notice: transientNotice,
           response: "",
+          responseActivities: [],
+          responseRoute: null,
         }));
 
         try {
@@ -258,6 +281,9 @@ export const useCompletion = () => {
             userMessage: inputWithOcr,
             imagesBase64,
             signal,
+            onFallbackActivity: appendResponseActivity,
+            onResolvedRoute: setResponseRoute,
+            onResolvedSelectedProvider: onSetSelectedAIProvider,
           })) {
             // Only update if this is still the current request
             if (currentRequestIdRef.current !== requestId) {
@@ -335,6 +361,9 @@ export const useCompletion = () => {
       allAiProviders,
       systemPrompt,
       state.conversationHistory,
+      appendResponseActivity,
+      setResponseRoute,
+      onSetSelectedAIProvider,
     ]
   );
 
@@ -390,6 +419,7 @@ export const useCompletion = () => {
       error: null,
       notice: null,
       isLoading: false,
+      responseActivities: [],
     }));
   }, []);
 
@@ -405,6 +435,7 @@ export const useCompletion = () => {
       isLoading: false,
       attachedFiles: [],
       ocrContexts: [],
+      responseActivities: [],
     }));
   }, []);
 
@@ -652,6 +683,8 @@ export const useCompletion = () => {
               notice: payload.notice || null,
               response: "",
               ocrContexts: [],
+              responseActivities: [],
+              responseRoute: null,
             }));
 
             // Prepare message history for the AI
@@ -697,6 +730,9 @@ export const useCompletion = () => {
               userMessage,
               imagesBase64,
               signal,
+              onFallbackActivity: appendResponseActivity,
+              onResolvedRoute: setResponseRoute,
+              onResolvedSelectedProvider: onSetSelectedAIProvider,
             })) {
               // Only update if this is still the current request
               if (currentRequestIdRef.current !== requestId || signal.aborted) {
@@ -758,6 +794,7 @@ export const useCompletion = () => {
               response: "",
               error: null,
               notice: `${payload.notice} Add a prompt and press Enter to send the extracted text.`,
+              responseActivities: [],
             }));
             return;
           }
@@ -785,6 +822,8 @@ export const useCompletion = () => {
             response: "",
             error: null,
             notice: `${payload.notice ? `${payload.notice} ` : ""}Screenshot attached (${prev.attachedFiles.length + 1}/${MAX_FILES}). Add a prompt and press Enter to send it, or switch screenshots to Auto Submit.`,
+            responseActivities: [],
+            responseRoute: null,
           }));
         }
       } catch (error) {
@@ -808,6 +847,9 @@ export const useCompletion = () => {
       systemPrompt,
       saveCurrentConversation,
       inputRef,
+      appendResponseActivity,
+      setResponseRoute,
+      onSetSelectedAIProvider,
     ]
   );
 
@@ -892,6 +934,7 @@ export const useCompletion = () => {
           error: null,
           notice: payload.notice,
           isLoading: false,
+          responseActivities: [],
         }));
         return;
       }
@@ -907,6 +950,7 @@ export const useCompletion = () => {
         response: "",
         error: null,
         notice: `${payload.notice} Add a prompt and press Enter to send the extracted text.`,
+        responseActivities: [],
       }));
     },
     [submit]
@@ -930,6 +974,8 @@ export const useCompletion = () => {
           error: state.error,
           notice: state.notice,
           response: state.response,
+          activities: state.responseActivities,
+          route: state.responseRoute,
           keepEngaged,
           conversationHistory: state.conversationHistory,
         },
@@ -945,6 +991,8 @@ export const useCompletion = () => {
     state.error,
     state.notice,
     state.response,
+    state.responseActivities,
+    state.responseRoute,
     keepEngaged,
     state.conversationHistory,
   ]);
@@ -986,6 +1034,7 @@ export const useCompletion = () => {
             isLoading: false,
             attachedFiles: [],
             ocrContexts: [],
+            responseActivities: [],
           }));
         }
       }
@@ -1089,6 +1138,7 @@ export const useCompletion = () => {
         : config.enabled
         ? "Capturing screenshot..."
         : "Select an area to capture. The response panel will update after capture.",
+      responseActivities: [],
     }));
 
     try {

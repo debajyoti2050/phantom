@@ -2,10 +2,23 @@ import { invoke } from "@/lib/electron/tauri-core";
 
 export type ProviderKeyKind = "ai" | "stt";
 
+export type ProviderModelSource = "suggested" | "custom" | "discovered";
+
+export interface ProviderModelProfile {
+  id: string;
+  label: string;
+  model: string;
+  enabled: boolean;
+  source: ProviderModelSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProviderApiKeyProfile {
   id: string;
   name: string;
   value: string;
+  models: ProviderModelProfile[];
   createdAt: string;
   updatedAt: string;
 }
@@ -20,6 +33,42 @@ const emptyVault = (): ProviderApiKeyVault => ({ ai: {}, stt: {} });
 const createId = () =>
   globalThis.crypto?.randomUUID?.() ||
   `key-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+function normalizeModelProfiles(
+  models?: Partial<ProviderModelProfile>[] | null
+): ProviderModelProfile[] {
+  if (!Array.isArray(models)) return [];
+
+  const now = new Date().toISOString();
+  const seen = new Set<string>();
+  return models
+    .filter((model): model is Partial<ProviderModelProfile> =>
+      Boolean(model && typeof model === "object")
+    )
+    .map((model) => {
+      const modelCode = String(model.model || "").trim();
+      return {
+        id: String(model.id || createId()),
+        label: String(model.label || modelCode || "Model"),
+        model: modelCode,
+        enabled: model.enabled !== false,
+        source:
+          model.source === "suggested" ||
+          model.source === "discovered" ||
+          model.source === "custom"
+            ? model.source
+            : "custom",
+        createdAt: String(model.createdAt || now),
+        updatedAt: String(model.updatedAt || now),
+      };
+    })
+    .filter((model) => {
+      const key = model.model.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
 
 function normalizeVault(vault?: Partial<ProviderApiKeyVault> | null) {
   const normalized = emptyVault();
@@ -38,6 +87,7 @@ function normalizeVault(vault?: Partial<ProviderApiKeyVault> | null) {
           id: String(profile.id || createId()),
           name: String(profile.name || "API key"),
           value: String(profile.value || ""),
+          models: normalizeModelProfiles(profile.models),
           createdAt: String(profile.createdAt || new Date().toISOString()),
           updatedAt: String(profile.updatedAt || new Date().toISOString()),
         }))
@@ -79,6 +129,7 @@ export async function saveProviderApiKeyProfile(
     id?: string;
     name: string;
     value: string;
+    models?: ProviderModelProfile[];
   }
 ) {
   const vault = await getProviderApiKeyVault();
@@ -91,6 +142,7 @@ export async function saveProviderApiKeyProfile(
     id: existing?.id || input.id || createId(),
     name: input.name.trim() || existing?.name || "API key",
     value: input.value,
+    models: normalizeModelProfiles(input.models || existing?.models || []),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
@@ -102,6 +154,22 @@ export async function saveProviderApiKeyProfile(
 
   await saveProviderApiKeyVault(vault);
   return profile;
+}
+
+export async function saveProviderApiKeyProfiles(
+  kind: ProviderKeyKind,
+  providerId: string,
+  profiles: ProviderApiKeyProfile[]
+) {
+  const vault = await getProviderApiKeyVault();
+  vault[kind][providerId] = profiles
+    .map((profile) => ({
+      ...profile,
+      models: normalizeModelProfiles(profile.models),
+    }))
+    .filter((profile) => profile.value.trim());
+  await saveProviderApiKeyVault(vault);
+  return vault[kind][providerId];
 }
 
 export async function deleteProviderApiKeyProfile(

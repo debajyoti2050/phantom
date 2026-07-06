@@ -882,6 +882,25 @@
     border-color: rgba(125, 211, 252, 0.3);
   }
 
+  .phantom-route-chip {
+    display: inline-flex;
+    min-width: 0;
+    max-width: min(14rem, 34vw);
+    align-items: center;
+    border: 1px solid rgba(167, 139, 250, 0.24);
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(59, 130, 246, 0.11), rgba(139, 92, 246, 0.1)),
+      rgba(255, 255, 255, 0.035);
+    color: #dbeafe;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.65rem;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .phantom-capture-chip {
     display: inline-flex;
     min-width: 0;
@@ -953,6 +972,87 @@
       linear-gradient(90deg, rgba(139, 92, 246, 0.12), rgba(56, 189, 248, 0.08)),
       rgba(255, 255, 255, 0.035);
     box-shadow: 0 0 18px rgba(139, 92, 246, 0.1);
+  }
+
+  .phantom-response-activity-row {
+    display: flex;
+    min-width: 0;
+    max-width: 32rem;
+    gap: 0.35rem;
+    overflow: hidden;
+    padding-top: 0.35rem;
+  }
+
+  .phantom-activity-chip {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 13rem;
+    align-items: center;
+    gap: 0.32rem;
+    border: 1px solid rgba(125, 211, 252, 0.22);
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(139, 92, 246, 0.08)),
+      rgba(255, 255, 255, 0.035);
+    color: #bfdbfe;
+    padding: 0.12rem 0.48rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.15;
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.08);
+  }
+
+  .phantom-activity-chip svg {
+    height: 0.78rem;
+    width: 0.78rem;
+    flex: 0 0 auto;
+  }
+
+  .phantom-activity-chip span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phantom-activity-chip.is-warning {
+    color: #fde68a;
+    border-color: rgba(245, 158, 11, 0.34);
+    background:
+      linear-gradient(90deg, rgba(245, 158, 11, 0.13), rgba(56, 189, 248, 0.06)),
+      rgba(255, 255, 255, 0.035);
+  }
+
+  .phantom-activity-chip.is-switching {
+    color: #c4b5fd;
+    border-color: rgba(139, 92, 246, 0.34);
+    background:
+      linear-gradient(90deg, rgba(139, 92, 246, 0.14), rgba(56, 189, 248, 0.08)),
+      rgba(255, 255, 255, 0.035);
+  }
+
+  .phantom-activity-chip.is-cooldown {
+    color: #f0abfc;
+    border-color: rgba(217, 70, 239, 0.32);
+    background:
+      linear-gradient(90deg, rgba(217, 70, 239, 0.12), rgba(56, 189, 248, 0.08)),
+      rgba(255, 255, 255, 0.035);
+  }
+
+  .phantom-activity-chip.is-success {
+    color: #a7f3d0;
+    border-color: rgba(34, 197, 94, 0.32);
+    background:
+      linear-gradient(90deg, rgba(34, 197, 94, 0.12), rgba(56, 189, 248, 0.08)),
+      rgba(255, 255, 255, 0.035);
+  }
+
+  .phantom-activity-chip.is-error {
+    color: #ffdce4;
+    border-color: rgba(255, 92, 122, 0.32);
+    background:
+      linear-gradient(90deg, rgba(255, 92, 122, 0.12), rgba(139, 92, 246, 0.08)),
+      rgba(255, 255, 255, 0.035);
   }
 
   .phantom-response-body {

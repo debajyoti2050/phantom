@@ -10,6 +10,7 @@ import {
   ImageIcon,
   Loader2,
   PinIcon,
+  RefreshCwIcon,
   SendHorizontalIcon,
   SparklesIcon,
   XIcon,
@@ -18,6 +19,7 @@ import { Button, Input, Markdown, ScrollArea, Switch } from "@/components";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useOverlayScale } from "@/hooks";
+import type { AIResponseActivity, AIResponseRoute } from "@/lib";
 
 type ResponseMessage = {
   id: string;
@@ -32,6 +34,8 @@ type ResponseWindowState = {
   error: string | null;
   notice: string | null;
   response: string;
+  activities: AIResponseActivity[];
+  route: AIResponseRoute | null;
   keepEngaged: boolean;
   conversationHistory: ResponseMessage[];
 };
@@ -42,6 +46,8 @@ const emptyState: ResponseWindowState = {
   error: null,
   notice: null,
   response: "",
+  activities: [],
+  route: null,
   keepEngaged: false,
   conversationHistory: [],
 };
@@ -151,11 +157,49 @@ function getCaptureStatus(notice: string | null) {
   };
 }
 
+function getActivityStatus(activity: AIResponseActivity) {
+  if (activity.type === "quota") {
+    return {
+      className: "is-warning",
+      Icon: AlertTriangleIcon,
+    };
+  }
+  if (activity.type === "cooldown") {
+    return {
+      className: "is-cooldown",
+      Icon: RefreshCwIcon,
+    };
+  }
+  if (activity.type === "connected") {
+    return {
+      className: "is-success",
+      Icon: CheckCircle2Icon,
+    };
+  }
+  if (activity.type === "exhausted") {
+    return {
+      className: "is-error",
+      Icon: AlertTriangleIcon,
+    };
+  }
+  if (activity.type === "try_key" || activity.type === "switch_model") {
+    return {
+      className: "is-switching",
+      Icon: RefreshCwIcon,
+    };
+  }
+  return {
+    className: "is-ready",
+    Icon: SparklesIcon,
+  };
+}
+
 export function ResponseOverlayWindow() {
   const [state, setState] = useState<ResponseWindowState>(emptyState);
   const [followUp, setFollowUp] = useState("");
   const { metrics: overlayMetrics } = useOverlayScale();
   const captureStatus = getCaptureStatus(state.notice);
+  const latestActivities = (state.activities || []).slice(-3);
   const stateLabel = state.error
     ? "Error"
     : state.isLoading
@@ -264,7 +308,47 @@ export function ResponseOverlayWindow() {
                 {state.keepEngaged ? (
                   <span className="phantom-state-chip is-pinned">Pinned</span>
                 ) : null}
+                {state.route?.model ? (
+                  <span
+                    className="phantom-route-chip"
+                    title={`Model: ${state.route.model}`}
+                  >
+                    Model: {state.route.model}
+                  </span>
+                ) : null}
+                {state.route?.keyName ? (
+                  <span
+                    className="phantom-route-chip"
+                    title={`Key: ${state.route.keyName}`}
+                  >
+                    Key: {state.route.keyName}
+                  </span>
+                ) : null}
               </div>
+              {latestActivities.length ? (
+                <div className="phantom-response-activity-row">
+                  {latestActivities.map((activity) => {
+                    const activityStatus = getActivityStatus(activity);
+                    return (
+                      <span
+                        key={`${activity.timestamp}-${activity.type}-${activity.model || activity.keyName || ""}`}
+                        className={`phantom-activity-chip ${activityStatus.className}`}
+                        title={activity.label}
+                      >
+                        <activityStatus.Icon
+                          className={
+                            activity.type === "try_key" ||
+                            activity.type === "switch_model"
+                              ? "animate-spin"
+                              : undefined
+                          }
+                        />
+                        <span>{activity.label}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           </div>
 

@@ -14,6 +14,340 @@ import { shouldUseLocalAPI } from "./local-api";
 import { CHUNK_POLL_INTERVAL_MS } from "../chat-constants";
 import { getResponseSettings, RESPONSE_LENGTHS, LANGUAGES } from "@/lib";
 import { MARKDOWN_FORMATTING_INSTRUCTIONS } from "@/config/constants";
+import {
+  getProviderApiKeyProfiles,
+  ProviderApiKeyProfile,
+} from "@/lib/storage/provider-api-keys";
+
+export type AIResponseActivityType =
+  | "quota"
+  | "cooldown"
+  | "switch_model"
+  | "try_key"
+  | "connected"
+  | "exhausted";
+
+export type AIResponseActivity = {
+  type: AIResponseActivityType;
+  label: string;
+  keyName?: string;
+  model?: string;
+  timestamp: number;
+};
+
+export type AIResponseRoute = {
+  keyName?: string;
+  model?: string;
+};
+
+type ProviderModelCooldown = {
+  providerId: string;
+  keyProfileId: string;
+  keyName?: string;
+  model: string;
+  reason?: string;
+  blockedAt: number;
+  expiresAt: number;
+};
+
+type SelectedAIProvider = {
+  provider: string;
+  variables: Record<string, string>;
+};
+
+type FallbackCandidate = {
+  variables: Record<string, string>;
+  providerId?: string;
+  keyProfileId?: string;
+  keyName?: string;
+  model?: string;
+  apiKeyValue?: string;
+  isCurrent: boolean;
+};
+
+const QUOTA_ERROR_PATTERNS = [
+  /rate\s*limit/i,
+  /too\s*many\s*requests/i,
+  /quota/i,
+  /resource\s+exhausted/i,
+  /limit\s+exceeded/i,
+  /requests?\s+per\s+minute/i,
+  /tokens?\s+per\s+minute/i,
+  /insufficient\s+quota/i,
+];
+
+const DAILY_QUOTA_PATTERNS = [
+  /\bdaily\b/i,
+  /\bper\s*day\b/i,
+  /\brpd\b/i,
+  /requests?\s+per\s+day/i,
+  /GenerateRequestsPerDay/i,
+];
+
+const SHORT_RATE_LIMIT_PATTERNS = [
+  /\brpm\b/i,
+  /\btpm\b/i,
+  /requests?\s+per\s+minute/i,
+  /tokens?\s+per\s+minute/i,
+  /per\s*minute/i,
+  /rate\s*limit/i,
+  /too\s*many\s*requests/i,
+];
+
+const SPEND_OR_ROLLING_PATTERNS = [
+  /spend/i,
+  /rolling/i,
+  /10\s*minute/i,
+  /ten\s*minute/i,
+];
+
+const MINUTE_COOLDOWN_MS = 90 * 1000;
+const GENERIC_COOLDOWN_MS = 10 * 60 * 1000;
+
+function isQuotaError(
+  status: number,
+  statusText: string,
+  errorText: string
+) {
+  const combined = `${statusText} ${errorText}`;
+  return status === 429 || QUOTA_ERROR_PATTERNS.some((pattern) => pattern.test(combined));
+}
+
+function getHeaderValue(headers: Headers, name: string) {
+  return headers.get(name) || headers.get(name.toLowerCase()) || "";
+}
+
+function getRetryAfterMs(headers: Headers) {
+  const retryAfter = getHeaderValue(headers, "Retry-After").trim();
+  if (!retryAfter) return null;
+
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+
+  const retryAt = Date.parse(retryAfter);
+  if (Number.isFinite(retryAt)) {
+    return Math.max(0, retryAt - Date.now());
+  }
+
+  return null;
+}
+
+function getNextPacificMidnightMs(now = new Date()) {
+  const pacificDateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .formatToParts(now)
+    .reduce<Record<string, string>>((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+  const year = Number(pacificDateParts.year);
+  const month = Number(pacificDateParts.month);
+  const day = Number(pacificDateParts.day);
+  const nextPacificDate = Date.UTC(year, month - 1, day + 1, 8, 0, 0);
+  return nextPacificDate;
+}
+
+function getCooldownDurationMs(response: Response, errorText: string) {
+  const retryAfterMs = getRetryAfterMs(response.headers);
+  if (retryAfterMs !== null) return retryAfterMs;
+
+  const combined = `${response.statusText} ${errorText}`;
+  if (DAILY_QUOTA_PATTERNS.some((pattern) => pattern.test(combined))) {
+    return Math.max(0, getNextPacificMidnightMs() - Date.now());
+  }
+  if (SHORT_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(combined))) {
+    return MINUTE_COOLDOWN_MS;
+  }
+  if (SPEND_OR_ROLLING_PATTERNS.some((pattern) => pattern.test(combined))) {
+    return GENERIC_COOLDOWN_MS;
+  }
+  return GENERIC_COOLDOWN_MS;
+}
+
+function normalizeCooldownPart(value?: string) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getCooldownKey(args: {
+  providerId?: string;
+  keyProfileId?: string;
+  model?: string;
+}) {
+  const providerId = normalizeCooldownPart(args.providerId);
+  const keyProfileId = normalizeCooldownPart(args.keyProfileId);
+  const model = normalizeCooldownPart(args.model);
+  if (!providerId || !keyProfileId || !model) return "";
+  return `${providerId}::${keyProfileId}::${model}`;
+}
+
+function getCandidateCooldown(
+  candidate: FallbackCandidate,
+  cooldowns: ProviderModelCooldown[]
+) {
+  const key = getCooldownKey(candidate);
+  if (!key) return undefined;
+  const now = Date.now();
+  return cooldowns.find(
+    (cooldown) => getCooldownKey(cooldown) === key && cooldown.expiresAt > now
+  );
+}
+
+function formatRetryTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getVariableKey(
+  variables: { key: string; value: string }[],
+  target: "api_key" | "model"
+) {
+  const exact = variables.find((variable) => variable.key === target);
+  if (exact) return exact.key;
+
+  const normalizedTarget = target.replace(/_/g, "");
+  return variables.find(
+    (variable) => variable.key.replace(/_/g, "").toLowerCase() === normalizedTarget
+  )?.key;
+}
+
+function sanitizeModelList(profile: ProviderApiKeyProfile, defaultModel = "") {
+  const enabledModels = (profile.models || [])
+    .filter((model) => model.enabled !== false && model.model.trim())
+    .map((model) => ({
+      model: model.model.trim(),
+      label: model.label || model.model,
+    }));
+
+  if (enabledModels.length) return enabledModels;
+  return defaultModel.trim()
+    ? [{ model: defaultModel.trim(), label: defaultModel.trim() }]
+    : [];
+}
+
+function buildFallbackCandidates(args: {
+  providerId?: string;
+  selectedVariables: Record<string, string>;
+  profiles: ProviderApiKeyProfile[];
+  apiKeyVarKey?: string;
+  modelVarKey?: string;
+  defaultModel?: string;
+}): FallbackCandidate[] {
+  const {
+    providerId,
+    selectedVariables,
+    profiles,
+    apiKeyVarKey,
+    modelVarKey,
+    defaultModel = "",
+  } = args;
+  const currentApiKey = apiKeyVarKey
+    ? selectedVariables[apiKeyVarKey]?.trim()
+    : "";
+  const currentModel = modelVarKey
+    ? selectedVariables[modelVarKey]?.trim() || defaultModel.trim()
+    : "";
+  const matchingProfile = apiKeyVarKey
+    ? profiles.find((profile) => profile.value === currentApiKey)
+    : undefined;
+  const orderedProfiles = matchingProfile
+    ? [
+        matchingProfile,
+        ...profiles.filter((profile) => profile.id !== matchingProfile.id),
+      ]
+    : profiles;
+
+  const candidates: FallbackCandidate[] = [];
+  const seen = new Set<string>();
+
+  const addCandidate = (candidate: FallbackCandidate) => {
+    const apiKeyValue = apiKeyVarKey
+      ? candidate.variables[apiKeyVarKey]?.trim()
+      : "";
+    const modelValue = modelVarKey
+      ? candidate.variables[modelVarKey]?.trim()
+      : "";
+    const key = `${apiKeyValue || "no-key"}::${modelValue || "no-model"}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(candidate);
+  };
+
+  if (!matchingProfile) {
+    addCandidate({
+      variables: {
+        ...selectedVariables,
+        ...(modelVarKey && currentModel ? { [modelVarKey]: currentModel } : {}),
+      },
+      providerId,
+      keyName: "Current key",
+      model: currentModel,
+      apiKeyValue: currentApiKey,
+      isCurrent: true,
+    });
+  }
+
+  for (const profile of orderedProfiles) {
+    let models = sanitizeModelList(profile, currentModel || defaultModel);
+    if (
+      profile.id === matchingProfile?.id &&
+      currentModel &&
+      !models.some(
+        (model) => model.model.toLowerCase() === currentModel.toLowerCase()
+      )
+    ) {
+      models.unshift({ model: currentModel, label: currentModel });
+    } else if (profile.id === matchingProfile?.id && currentModel) {
+      models = [
+        ...models.filter(
+          (model) => model.model.toLowerCase() === currentModel.toLowerCase()
+        ),
+        ...models.filter(
+          (model) => model.model.toLowerCase() !== currentModel.toLowerCase()
+        ),
+      ];
+    }
+
+    for (const model of models) {
+      addCandidate({
+        variables: {
+          ...selectedVariables,
+          ...(apiKeyVarKey ? { [apiKeyVarKey]: profile.value } : {}),
+          ...(modelVarKey ? { [modelVarKey]: model.model } : {}),
+        },
+        providerId,
+        keyProfileId: profile.id,
+        keyName: profile.name,
+        model: model.model,
+        apiKeyValue: profile.value,
+        isCurrent:
+          profile.value === currentApiKey && model.model === currentModel,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function createActivity(
+  type: AIResponseActivityType,
+  label: string,
+  details: Pick<AIResponseActivity, "keyName" | "model"> = {}
+): AIResponseActivity {
+  return {
+    type,
+    label,
+    timestamp: Date.now(),
+    ...details,
+  };
+}
 
 function buildEnhancedSystemPrompt(baseSystemPrompt?: string): string {
   const responseSettings = getResponseSettings();
@@ -163,15 +497,15 @@ async function* fetchLocalAIResponse(params: {
 
 export async function* fetchAIResponse(params: {
   provider: TYPE_PROVIDER | undefined;
-  selectedProvider: {
-    provider: string;
-    variables: Record<string, string>;
-  };
+  selectedProvider: SelectedAIProvider;
   systemPrompt?: string;
   history?: Message[];
   userMessage: string;
   imagesBase64?: string[];
   signal?: AbortSignal;
+  onFallbackActivity?: (activity: AIResponseActivity) => void;
+  onResolvedRoute?: (route: AIResponseRoute | null) => void;
+  onResolvedSelectedProvider?: (selectedProvider: SelectedAIProvider) => void;
 }): AsyncIterable<string> {
   try {
     const {
@@ -182,6 +516,9 @@ export async function* fetchAIResponse(params: {
       userMessage,
       imagesBase64 = [],
       signal,
+      onFallbackActivity,
+      onResolvedRoute,
+      onResolvedSelectedProvider,
     } = params;
 
     // Check if already aborted
@@ -232,10 +569,13 @@ export async function* fetchAIResponse(params: {
     }
 
     const extractedVariables = extractVariables(provider.curl);
+    const apiKeyVarKey = getVariableKey(extractedVariables, "api_key");
+    const modelVarKey = getVariableKey(extractedVariables, "model");
     const requiredVars = extractedVariables.filter(
       ({ key }) => key !== "SYSTEM_PROMPT" && key !== "TEXT" && key !== "IMAGE"
     );
     for (const { key } of requiredVars) {
+      if (key === apiKeyVarKey || key === modelVarKey) continue;
       if (
         !selectedVariables[key] ||
         selectedVariables[key].trim() === ""
@@ -255,84 +595,306 @@ export async function* fetchAIResponse(params: {
       );
     }
 
-    let bodyObj: any = curlJson.data
-      ? JSON.parse(JSON.stringify(curlJson.data))
-      : {};
-    const messagesKey = Object.keys(bodyObj).find((key) =>
-      ["messages", "contents", "conversation", "history"].includes(key)
+    const profiles =
+      provider.id && apiKeyVarKey
+        ? await getProviderApiKeyProfiles("ai", provider.id).catch(() => [])
+        : [];
+    const activeCooldowns = provider.id
+      ? await invoke<ProviderModelCooldown[]>(
+          "provider_model_cooldowns_get"
+        ).catch(() => [])
+      : [];
+    const rawCandidates = buildFallbackCandidates({
+      providerId: provider.id,
+      selectedVariables,
+      profiles,
+      apiKeyVarKey,
+      modelVarKey,
+      defaultModel: provider.defaultModel,
+    });
+    const configuredCandidates = rawCandidates.filter((candidate) =>
+      requiredVars.every(({ key }) => candidate.variables[key]?.trim())
+    );
+    const cooledConfiguredCandidates = configuredCandidates
+      .map((candidate) => ({
+        candidate,
+        cooldown: getCandidateCooldown(candidate, activeCooldowns),
+      }))
+      .filter((item) => item.cooldown);
+    const candidates = configuredCandidates.filter(
+      (candidate) => !getCandidateCooldown(candidate, activeCooldowns)
     );
 
-    if (messagesKey && Array.isArray(bodyObj[messagesKey])) {
-      const finalMessages = buildDynamicMessages(
-        bodyObj[messagesKey],
-        history,
-        userMessage,
-        imagesBase64
+    for (const { key } of requiredVars) {
+      const hasCandidateValue = configuredCandidates.some((candidate) =>
+        candidate.variables[key]?.trim()
       );
-      bodyObj[messagesKey] = finalMessages;
+      if (!hasCandidateValue) {
+        throw new Error(
+          `Missing required variable: ${key}. Please configure it in settings.`
+        );
+      }
     }
 
-    const allVariables = {
-      ...Object.fromEntries(
-        Object.entries(selectedVariables).map(([key, value]) => [
-          key.toUpperCase(),
-          value,
-        ])
-      ),
-      SYSTEM_PROMPT: enhancedSystemPrompt || "",
-    };
+    if (!candidates.length && cooledConfiguredCandidates.length) {
+      const nearestCooldown = cooledConfiguredCandidates
+        .map((item) => item.cooldown!)
+        .sort((a, b) => a.expiresAt - b.expiresAt)[0];
+      onFallbackActivity?.(
+        createActivity(
+          "exhausted",
+          `Fallback exhausted - retry after ${formatRetryTime(
+            nearestCooldown.expiresAt
+          )}`,
+          {
+            keyName: nearestCooldown.keyName,
+            model: nearestCooldown.model,
+          }
+        )
+      );
+      yield `All configured models are cooling down. Try again after ${formatRetryTime(
+        nearestCooldown.expiresAt
+      )}.`;
+      return;
+    }
 
-    bodyObj = deepVariableReplacer(bodyObj, allVariables);
-    let url = deepVariableReplacer(curlJson.url || "", allVariables);
+    if (
+      candidates.length &&
+      configuredCandidates.length &&
+      getCandidateCooldown(configuredCandidates[0], activeCooldowns)
+    ) {
+      onFallbackActivity?.(
+        createActivity(
+          "switch_model",
+          `Switching model: ${candidates[0].model || "next available"}`,
+          { keyName: candidates[0].keyName, model: candidates[0].model }
+        )
+      );
+    }
 
-    const headers = deepVariableReplacer(curlJson.header || {}, allVariables);
-    headers["Content-Type"] = "application/json";
+    const buildRequest = (variables: Record<string, string>) => {
+      let bodyObj: any = curlJson.data
+        ? JSON.parse(JSON.stringify(curlJson.data))
+        : {};
+      const messagesKey = Object.keys(bodyObj).find((key) =>
+        ["messages", "contents", "conversation", "history"].includes(key)
+      );
 
-    if (provider?.streaming) {
-      if (typeof bodyObj === "object" && bodyObj !== null) {
-        const streamKey = Object.keys(bodyObj).find(
-          (k) => k.toLowerCase() === "stream"
+      if (messagesKey && Array.isArray(bodyObj[messagesKey])) {
+        const finalMessages = buildDynamicMessages(
+          bodyObj[messagesKey],
+          history,
+          userMessage,
+          imagesBase64
         );
-        if (streamKey) {
-          bodyObj[streamKey] = true;
-        } else {
-          bodyObj.stream = true;
+        bodyObj[messagesKey] = finalMessages;
+      }
+
+      const allVariables = {
+        ...Object.fromEntries(
+          Object.entries(variables).map(([key, value]) => [
+            key.toUpperCase(),
+            value,
+          ])
+        ),
+        SYSTEM_PROMPT: enhancedSystemPrompt || "",
+      };
+
+      bodyObj = deepVariableReplacer(bodyObj, allVariables);
+      const url = deepVariableReplacer(curlJson.url || "", allVariables);
+      const headers = deepVariableReplacer(curlJson.header || {}, allVariables);
+      headers["Content-Type"] = "application/json";
+
+      if (provider?.streaming) {
+        if (typeof bodyObj === "object" && bodyObj !== null) {
+          const streamKey = Object.keys(bodyObj).find(
+            (k) => k.toLowerCase() === "stream"
+          );
+          if (streamKey) {
+            bodyObj[streamKey] = true;
+          } else {
+            bodyObj.stream = true;
+          }
         }
       }
-    }
+
+      return { bodyObj, headers, url };
+    };
 
     const fetchFunction = tauriFetch;
+    let response: Awaited<ReturnType<typeof fetchFunction>> | null = null;
+    let activeCandidate: FallbackCandidate | null = null;
 
-    let response;
-    try {
-      response = await fetchFunction(url, {
-        method: curlJson.method || "POST",
-        headers,
-        body: curlJson.method === "GET" ? undefined : JSON.stringify(bodyObj),
-        signal,
-      });
-    } catch (fetchError) {
-      // Check if aborted
-      if (
-        signal?.aborted ||
-        (fetchError instanceof Error && fetchError.name === "AbortError")
-      ) {
-        return; // Silently return on abort
+    for (let index = 0; index < candidates.length; index++) {
+      const candidate = candidates[index];
+
+      if (signal?.aborted) {
+        return;
       }
-      yield `Network error during API request: ${
-        fetchError instanceof Error ? fetchError.message : "Unknown error"
+
+      onResolvedRoute?.({
+        keyName: candidate.keyName,
+        model: candidate.model,
+      });
+
+      if (index > 0) {
+        const previous = candidates[index - 1];
+        if (candidate.apiKeyValue !== previous.apiKeyValue) {
+          onFallbackActivity?.(
+            createActivity(
+              "try_key",
+              `Trying key: ${candidate.keyName || "saved key"}`,
+              { keyName: candidate.keyName, model: candidate.model }
+            )
+          );
+        }
+        if (candidate.model && candidate.model !== previous.model) {
+          onFallbackActivity?.(
+            createActivity(
+              "switch_model",
+              `Switching model: ${candidate.model}`,
+              { keyName: candidate.keyName, model: candidate.model }
+            )
+          );
+        }
+      }
+
+      const request = buildRequest(candidate.variables);
+      try {
+        response = await fetchFunction(request.url, {
+          method: curlJson.method || "POST",
+          headers: request.headers,
+          body:
+            curlJson.method === "GET"
+              ? undefined
+              : JSON.stringify(request.bodyObj),
+          signal,
+        });
+      } catch (fetchError) {
+        if (
+          signal?.aborted ||
+          (fetchError instanceof Error && fetchError.name === "AbortError")
+        ) {
+          return;
+        }
+        yield `Network error during API request: ${
+          fetchError instanceof Error ? fetchError.message : "Unknown error"
+        }`;
+        return;
+      }
+
+      if (!response) {
+        yield "API request failed before a response was available.";
+        return;
+      }
+      const currentResponse = response;
+
+      if (currentResponse.ok) {
+        activeCandidate = candidate;
+        if (candidate.keyProfileId && candidate.model && candidate.providerId) {
+          void invoke("provider_model_cooldown_clear", {
+            providerId: candidate.providerId,
+            keyProfileId: candidate.keyProfileId,
+            model: candidate.model,
+          });
+        }
+        if (!candidate.isCurrent) {
+          onFallbackActivity?.(
+            createActivity(
+              "connected",
+              `Connected: ${candidate.keyName || "saved key"}${
+                candidate.model ? ` / ${candidate.model}` : ""
+              }`,
+              { keyName: candidate.keyName, model: candidate.model }
+            )
+          );
+          onResolvedSelectedProvider?.({
+            provider: selectedProvider.provider,
+            variables: candidate.variables,
+          });
+        }
+        break;
+      }
+
+      let errorText = "";
+      try {
+        errorText = await currentResponse.text();
+      } catch {}
+
+      const canFallback =
+        index < candidates.length - 1 &&
+        isQuotaError(currentResponse.status, currentResponse.statusText, errorText);
+      const isQuota = isQuotaError(
+        currentResponse.status,
+        currentResponse.statusText,
+        errorText
+      );
+
+      const markCandidateCooldown = async () => {
+        if (!candidate.keyProfileId || !candidate.model || !candidate.providerId) {
+          return;
+        }
+        const cooldownMs = getCooldownDurationMs(currentResponse, errorText);
+        const expiresAt = Date.now() + Math.max(1000, cooldownMs);
+        await invoke("provider_model_cooldown_mark", {
+          providerId: candidate.providerId,
+          keyProfileId: candidate.keyProfileId,
+          keyName: candidate.keyName || "saved key",
+          model: candidate.model,
+          reason: `${currentResponse.status} ${currentResponse.statusText}`.trim(),
+          blockedAt: Date.now(),
+          expiresAt,
+        });
+        onFallbackActivity?.(
+          createActivity(
+            "cooldown",
+            `Cooling down: ${candidate.model}`,
+            { keyName: candidate.keyName, model: candidate.model }
+          )
+        );
+      };
+
+      if (canFallback) {
+        onFallbackActivity?.(
+          createActivity(
+            "quota",
+            `Quota reached${
+              candidate.model ? ` on ${candidate.model}` : ""
+            }`,
+            { keyName: candidate.keyName, model: candidate.model }
+          )
+        );
+        await markCandidateCooldown();
+        continue;
+      }
+
+      if (isQuota) {
+        onFallbackActivity?.(
+          createActivity(
+            "quota",
+            `Quota reached${
+              candidate.model ? ` on ${candidate.model}` : ""
+            }`,
+            { keyName: candidate.keyName, model: candidate.model }
+          )
+        );
+        await markCandidateCooldown();
+        onFallbackActivity?.(
+          createActivity("exhausted", "Fallback exhausted", {
+            keyName: candidate.keyName,
+            model: candidate.model,
+          })
+        );
+      }
+
+      yield `API request failed: ${currentResponse.status} ${currentResponse.statusText}${
+        errorText ? ` - ${errorText}` : ""
       }`;
       return;
     }
 
-    if (!response.ok) {
-      let errorText = "";
-      try {
-        errorText = await response.text();
-      } catch {}
-      yield `API request failed: ${response.status} ${response.statusText}${
-        errorText ? ` - ${errorText}` : ""
-      }`;
+    if (!response || !activeCandidate) {
+      yield "No API key/model fallback candidates are available. Add at least one API key and model in Providers.";
       return;
     }
 

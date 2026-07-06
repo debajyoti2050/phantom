@@ -59,6 +59,7 @@ export const useChatCompletion = (
 ) => {
   const {
     selectedAIProvider,
+    onSetSelectedAIProvider,
     allAiProviders,
     systemPrompt,
     screenshotConfiguration,
@@ -253,6 +254,7 @@ export const useChatCompletion = (
             userMessage: inputWithOcr,
             imagesBase64,
             signal,
+            onResolvedSelectedProvider: onSetSelectedAIProvider,
           })) {
             // Only update if this is still the current request
             if (currentRequestIdRef.current !== requestId) {
@@ -398,6 +400,7 @@ export const useChatCompletion = (
       state.attachedFiles,
       state.ocrContexts,
       selectedAIProvider,
+      onSetSelectedAIProvider,
       allAiProviders,
       systemPrompt,
       messages,

@@ -102,6 +102,7 @@ export function useSystemAudio() {
     selectedSttProvider,
     allSttProviders,
     selectedAIProvider,
+    onSetSelectedAIProvider,
     allAiProviders,
     systemPrompt,
     selectedAudioDevices,
@@ -509,6 +510,7 @@ export function useSystemAudio() {
             history: previousMessages,
             userMessage: transcription,
             imagesBase64: [],
+            onResolvedSelectedProvider: onSetSelectedAIProvider,
           })) {
             fullResponse += chunk;
             setLastAIResponse((prev) => prev + chunk);
@@ -547,7 +549,7 @@ export function useSystemAudio() {
         // No auto-restart - user manually controls when to start next recording
       }
     },
-    [selectedAIProvider, allAiProviders, conversation.messages]
+    [selectedAIProvider, onSetSelectedAIProvider, allAiProviders, conversation.messages]
   );
 
   const startCapture = useCallback(async () => {
